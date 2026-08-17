@@ -42,59 +42,62 @@ def transcribe_audio_file(audio_path):
         pass
     return ""
 
-def shortcode_to_media_id(shortcode):
-    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
-    media_id = 0
-    for letter in shortcode:
-        if letter in alphabet:
-            media_id = (media_id * 64) + alphabet.index(letter)
-    return media_id
-
 def extract_instagram_comments(shortcode, cookies_path):
-    """Extract pinned and top comments from an Instagram post using session cookies."""
+    """Extract pinned and top comments from Instagram post using GraphQL and session cookies."""
     if not os.path.exists(cookies_path) or not shortcode:
         return ""
     
     try:
-        media_id = shortcode_to_media_id(shortcode)
-        if not media_id:
-            return ""
-
         cj = http.cookiejar.MozillaCookieJar(cookies_path)
         cj.load()
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
 
-        req = urllib.request.Request(
-            f"https://i.instagram.com/api/v1/media/{media_id}/comments/?can_support_threading=true",
-            headers={
-                "User-Agent": "Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; samsung; SM-G991B; o1s; exynos2100; en_US; 458229258)",
-                "X-IG-App-ID": "936619743392459",
-                "X-IG-Capabilities": "36r/Fx8=",
-                "X-IG-Connection-Type": "WIFI",
-                "Accept-Language": "en-US"
-            }
-        )
+        csrf = ""
+        for c in cj:
+            if c.name == "csrftoken":
+                csrf = c.value
 
-        with opener.open(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            comments_list = []
-            
-            pinned = data.get("pinned_comments", [])
-            for pc in pinned:
-                u = pc.get("user", {}).get("username", "creator")
-                t = pc.get("text", "").strip()
-                if t:
-                    comments_list.append(f"[PINNED by @{u}]: {t}")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "X-IG-App-ID": "936619743392459",
+            "X-ASBD-ID": "129477",
+            "X-CSRFToken": csrf,
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": f"https://www.instagram.com/p/{shortcode}/"
+        }
 
-            regular = data.get("comments", [])
-            for c in regular[:12]:
-                u = c.get("user", {}).get("username", "user")
-                t = c.get("text", "").strip()
-                if t and not any(t in existing for existing in comments_list):
-                    comments_list.append(f"@{u}: {t}")
+        # Query hashes for Instagram web post comments
+        query_hashes = [
+            "bc3296d1ce80a24b1b6e40b1e72903f5",
+            "b3055c2c9da449f818460d4d3d424125",
+            "97b41c52304d77ce08d4debc940da588"
+        ]
 
-            if comments_list:
-                return "\n".join(comments_list[:8])
+        for qh in query_hashes:
+            url = f"https://www.instagram.com/graphql/query/?query_hash={qh}&variables=%7B%22shortcode%22:%22{shortcode}%22,%22first%22:20%7D"
+            req = urllib.request.Request(url, headers=headers)
+            try:
+                with opener.open(req, timeout=8) as resp:
+                    raw = resp.read().decode("utf-8")
+                    data = json.loads(raw)
+                    edges = data.get("data", {}).get("shortcode_media", {}).get("edge_media_to_parent_comment", {}).get("edges", [])
+                    if edges:
+                        comments_list = []
+                        for e in edges:
+                            node = e.get("node", {})
+                            u = node.get("owner", {}).get("username", "user")
+                            t = node.get("text", "").strip()
+                            if t and not any(t in existing for existing in comments_list):
+                                # Check if pinned
+                                if node.get("is_pinned") or node.get("is_pinned_by_creator"):
+                                    comments_list.append(f"[PINNED by @{u}]: {t}")
+                                else:
+                                    comments_list.append(f"@{u}: {t}")
+                        if comments_list:
+                            return "\n".join(comments_list[:12])
+            except Exception:
+                continue
+
     except Exception:
         pass
     return ""
@@ -239,6 +242,7 @@ def scrape_instagram(url):
         cmd_json.extend(["--cookies", cookies_path])
     cmd_json.append(url)
 
+    carousel_image_urls = []
     try:
         proc = subprocess.run(cmd_json, capture_output=True, text=True, timeout=30)
         stdout = proc.stdout
@@ -258,16 +262,19 @@ def scrape_instagram(url):
                             result["likes"] = data.get("likes")
                         if data.get("tags"):
                             result["tags"] = data.get("tags")
+                    
+                    if isinstance(entry, list) and len(entry) >= 2 and isinstance(entry[1], str) and entry[1].startswith("http"):
+                        carousel_image_urls.append(entry[1])
     except Exception as e:
         result["error"] = str(e)
 
-    # 2. Extract Comments Section & Pinned Comments
+    # 2. Extract Comments Section & Pinned Comments via GraphQL
     if shortcode:
         comments_text = extract_instagram_comments(shortcode, cookies_path)
         if comments_text:
             result["comments"] = comments_text
 
-    # 3. Audio & Video frames OCR
+    # 3. Audio & Video frames OCR (for video reels)
     with tempfile.TemporaryDirectory() as tmpdir:
         cmd_dl = ["gallery-dl", "--dest", tmpdir]
         if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 100:
