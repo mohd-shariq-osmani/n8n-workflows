@@ -8,6 +8,7 @@ import tempfile
 import glob
 import urllib.request
 import urllib.parse
+import http.cookiejar
 import html
 from bs4 import BeautifulSoup
 
@@ -41,12 +42,70 @@ def transcribe_audio_file(audio_path):
         pass
     return ""
 
+def shortcode_to_media_id(shortcode):
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+    media_id = 0
+    for letter in shortcode:
+        if letter in alphabet:
+            media_id = (media_id * 64) + alphabet.index(letter)
+    return media_id
+
+def extract_instagram_comments(shortcode, cookies_path):
+    """Extract pinned and top comments from an Instagram post using session cookies."""
+    if not os.path.exists(cookies_path) or not shortcode:
+        return ""
+    
+    try:
+        media_id = shortcode_to_media_id(shortcode)
+        if not media_id:
+            return ""
+
+        cj = http.cookiejar.MozillaCookieJar(cookies_path)
+        cj.load()
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+
+        req = urllib.request.Request(
+            f"https://i.instagram.com/api/v1/media/{media_id}/comments/?can_support_threading=true",
+            headers={
+                "User-Agent": "Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; samsung; SM-G991B; o1s; exynos2100; en_US; 458229258)",
+                "X-IG-App-ID": "936619743392459",
+                "X-IG-Capabilities": "36r/Fx8=",
+                "X-IG-Connection-Type": "WIFI",
+                "Accept-Language": "en-US"
+            }
+        )
+
+        with opener.open(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            comments_list = []
+            
+            pinned = data.get("pinned_comments", [])
+            for pc in pinned:
+                u = pc.get("user", {}).get("username", "creator")
+                t = pc.get("text", "").strip()
+                if t:
+                    comments_list.append(f"[PINNED by @{u}]: {t}")
+
+            regular = data.get("comments", [])
+            for c in regular[:12]:
+                u = c.get("user", {}).get("username", "user")
+                t = c.get("text", "").strip()
+                if t and not any(t in existing for existing in comments_list):
+                    comments_list.append(f"@{u}: {t}")
+
+            if comments_list:
+                return "\n".join(comments_list[:8])
+    except Exception:
+        pass
+    return ""
+
 def scrape_youtube(url):
     result = {
         "title": "",
         "caption": "",
         "spokenTranscript": "",
         "onScreenText": "",
+        "comments": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
@@ -57,7 +116,6 @@ def scrape_youtube(url):
     }
     
     try:
-        # 1. Fetch metadata and subtitle index via yt-dlp
         cmd = ['yt-dlp', '--dump-single-json', '--skip-download', '--no-warnings', url]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if proc.stdout.strip():
@@ -69,7 +127,6 @@ def scrape_youtube(url):
             result["likes"] = meta.get("like_count", 0)
             result["tags"] = meta.get("tags", [])
             
-            # 2. Extract Subtitles / Transcript (English preferred, or auto-caption)
             subs = meta.get("subtitles", {}) or {}
             auto_subs = meta.get("automatic_captions", {}) or {}
             
@@ -92,7 +149,6 @@ def scrape_youtube(url):
                 target_sub = list({**subs, **auto_subs}.values())[0]
 
             if target_sub:
-                # Find json3 or vtt format
                 sub_url = None
                 for fmt in target_sub:
                     if fmt.get("ext") == "json3":
@@ -131,7 +187,6 @@ def scrape_youtube(url):
     except Exception as e:
         result["error"] = f"YouTube scrape error: {str(e)}"
 
-    # 3. Fallback: If no transcript found and video duration is short, transcribe audio
     if not result["spokenTranscript"]:
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
@@ -164,6 +219,7 @@ def scrape_instagram(url):
         "caption": "",
         "spokenTranscript": "",
         "onScreenText": "",
+        "comments": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
@@ -172,6 +228,10 @@ def scrape_instagram(url):
         "sourceType": "instagram",
         "error": None
     }
+
+    # Extract shortcode
+    shortcode_match = re.search(r'/(?:p|reel|tv)/([A-Za-z0-9_-]+)', url)
+    shortcode = shortcode_match.group(1) if shortcode_match else ""
 
     # 1. Metadata
     cmd_json = ["gallery-dl", "-j", "--no-download"]
@@ -201,7 +261,13 @@ def scrape_instagram(url):
     except Exception as e:
         result["error"] = str(e)
 
-    # 2. Audio & Video frames OCR
+    # 2. Extract Comments Section & Pinned Comments
+    if shortcode:
+        comments_text = extract_instagram_comments(shortcode, cookies_path)
+        if comments_text:
+            result["comments"] = comments_text
+
+    # 3. Audio & Video frames OCR
     with tempfile.TemporaryDirectory() as tmpdir:
         cmd_dl = ["gallery-dl", "--dest", tmpdir]
         if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 100:
@@ -252,6 +318,7 @@ def scrape_webpage(url):
         "caption": "",
         "spokenTranscript": "",
         "onScreenText": "",
+        "comments": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
