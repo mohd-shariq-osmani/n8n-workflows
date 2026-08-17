@@ -1006,16 +1006,29 @@
     },
     {
       "parameters": {
-        "jsCode": "const https = require('https');\n\nconst token = process.env.DISCORD_BOT_TOKEN || (typeof $env !== 'undefined' ? $env.DISCORD_BOT_TOKEN : '');\nconst channels = [\n  { id: '1527849679683850250', name: 'Recipes', channelTag: '#recipe', icon: '\ud83c\udf73' },\n  { id: '1527858846985486366', name: 'Tech & Projects', channelTag: '#projects', icon: '\ud83d\udcbb' },\n  { id: '1527858942594646056', name: 'Workouts', channelTag: '#workout', icon: '\ud83c\udfcb\ufe0f' },\n  { id: '1538893352668233789', name: 'Anime & Manhwa', channelTag: '#anime-manhua', icon: '\ud83c\udf8c' },\n  { id: '1527859066259374212', name: 'Movies & TV', channelTag: '#movie-tv', icon: '\ud83c\udfac' },\n  { id: '1538704806900797450', name: 'General & Articles', channelTag: '#others', icon: '\ud83d\udccc' }\n];\n\nfunction fetchMessages(channelId) {\n  return new Promise((resolve) => {\n    const options = {\n      hostname: 'discord.com',\n      path: '/api/v10/channels/' + channelId + '/messages?limit=25',\n      method: 'GET',\n      headers: {\n        'Authorization': 'Bot ' + token,\n        'User-Agent': 'DiscordBot (https://discord.com, 1.0)'\n      }\n    };\n    https.get(options, (res) => {\n      let data = '';\n      res.on('data', chunk => data += chunk);\n      res.on('end', () => {\n        try {\n          resolve(JSON.parse(data));\n        } catch (e) {\n          resolve([]);\n        }\n      });\n    }).on('error', () => resolve([]));\n  });\n}\n\nreturn (async () => {\n  const now = new Date();\n  const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);\n  const dateStr = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' });\n\n  const categorizedItems = [];\n  let totalCount = 0;\n\n  for (const c of channels) {\n    const msgs = await fetchMessages(c.id);\n    const validItems = [];\n\n    if (Array.isArray(msgs)) {\n      const recent = msgs.filter(m => new Date(m.timestamp).getTime() >= oneDayAgo && m.author && m.author.bot);\n      \n      for (const m of recent) {\n        if (m.content.includes(\"*(Part 2/\") || m.content.includes(\"*(Part 3/\") || m.content.includes(\"*(Part 4/\")) {\n          continue;\n        }\n\n        const titleMatch = m.content.match(/^#\\s+[\ud83c\udf73\ud83d\udcbb\ud83c\udfcb\ufe0f\ud83c\udf8c\ud83c\udfac\ud83d\udccc\ud83c\udfad]?\\s*([^\\n]+)/m) || m.content.match(/^\\*\\*([^\\n]+)\\*\\*/m);\n        let title = titleMatch ? titleMatch[1].trim() : \"\";\n        title = title.replace(/[#*`>]/g, '').trim();\n\n        if (!title || title.length < 3 || title.startsWith(\"Where to Watch\") || title.startsWith(\"Bonus Note\") || title.startsWith(\"Links:\")) {\n          continue;\n        }\n\n        let link = \"\";\n        const ghMatch = m.content.match(/\ud83d\udd17?\\s*\\*\\*GitHub:\\*\\*\\s*(https?:\\/\\/\\S+)/i);\n        const imdbMatch = m.content.match(/\ud83c\udfac?\\s*\\*\\*IMDb:\\*\\*\\s*(https?:\\/\\/\\S+)/i);\n        const sourceMatch = m.content.match(/\ud83d\udd17?\\s*\\*\\*Source:\\*\\*\\s*(https?:\\/\\/\\S+)/i) || m.content.match(/https?:\\/\\/\\S+/i);\n\n        if (ghMatch) link = ghMatch[1].trim();\n        else if (imdbMatch) link = imdbMatch[1].trim();\n        else if (sourceMatch) link = sourceMatch[1].trim();\n\n        const messageLink = `https://discord.com/channels/${m.channel_id}/${m.id}`;\n        const finalLink = link || messageLink;\n\n        if (!validItems.some(v => v.title.toLowerCase() === title.toLowerCase())) {\n          validItems.push({ title, link: finalLink });\n          totalCount++;\n        }\n      }\n    }\n\n    if (validItems.length > 0) {\n      categorizedItems.push({\n        name: c.name,\n        channelTag: c.channelTag,\n        icon: c.icon,\n        items: validItems\n      });\n    }\n  }\n\n  let markdown = `# \ud83d\uddde\ufe0f Daily Digest \u2014 ${dateStr}\\n> \u23f1\ufe0f *Daily recap of ${totalCount} ${totalCount === 1 ? 'item' : 'items'} curated across channels.*\\n\\n`;\n\n  if (categorizedItems.length === 0) {\n    markdown = `# \ud83d\uddde\ufe0f Daily Digest \u2014 ${dateStr}\\n> \u23f1\ufe0f *No new items were posted across channels in the last 24 hours. Send links or images to curate content!*`;\n  } else {\n    for (const cat of categorizedItems) {\n      markdown += `### ${cat.icon} ${cat.name} (\\`${cat.channelTag}\\`)\\n`;\n      for (const item of cat.items) {\n        markdown += `\u2022 [${item.title}](${item.link})\\n`;\n      }\n      markdown += `\\n`;\n    }\n    markdown += `---\\n*\u26a1 Next daily digest tomorrow at 11:00 PM IST.*`;\n  }\n\n  return [{\n    json: {\n      digestMarkdown: markdown,\n      totalCount: totalCount,\n      date: dateStr\n    }\n  }];\n})();"
+        "command": "python3 /usr/local/bin/generate_daily_digest.py"
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
       "position": [
         2640,
         3050
       ],
-      "id": "format-daily-digest-node",
+      "id": "generate-daily-digest-cmd",
       "name": "Generate Daily Digest"
+    },
+    {
+      "parameters": {
+        "jsCode": "const stdout = $input.first().json.stdout || \"{}\";\nlet parsed = {};\ntry {\n  parsed = JSON.parse(stdout);\n} catch (e) {\n  parsed = {\n    digestMarkdown: stdout,\n    totalCount: 0\n  };\n}\n\nreturn [{\n  json: {\n    digestMarkdown: parsed.digestMarkdown || stdout,\n    totalCount: parsed.totalCount || 0,\n    date: parsed.date || \"\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        3050
+      ],
+      "id": "parse-daily-digest-code",
+      "name": "Parse Daily Digest"
     },
     {
       "parameters": {
@@ -1043,7 +1056,7 @@
       "type": "n8n-nodes-base.discord",
       "typeVersion": 2,
       "position": [
-        2880,
+        3120,
         3050
       ],
       "id": "post-daily-digest-general-node",
@@ -1482,6 +1495,17 @@
       ]
     },
     "Generate Daily Digest": {
+      "main": [
+        [
+          {
+            "node": "Parse Daily Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Daily Digest": {
       "main": [
         [
           {
