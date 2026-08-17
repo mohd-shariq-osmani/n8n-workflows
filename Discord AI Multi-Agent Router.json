@@ -180,7 +180,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const extractItems = $(\"Extract URLs\").all();\nlet scrapedItems = [];\ntry {\n  if ($(\"Parse Instagram (gallery-dl)\").isExecuted) {\n    scrapedItems = $(\"Parse Instagram (gallery-dl)\").all();\n  }\n} catch (e) {\n  scrapedItems = [];\n}\n\nreturn $input.all().map((item, index) => {\n  const text = item.json.text || item.json.response || item.json.output || \"\";\n  let agent = \"others\";\n\n  try {\n    const cleanText = text.replace(/```json/g, \"\").replace(/```/g, \"\").trim();\n    const parsed = JSON.parse(cleanText);\n    agent = (parsed.agent || \"others\").toLowerCase().trim();\n  } catch (e) {\n    const lower = text.toLowerCase();\n    if (lower.includes(\"project\") || lower.includes(\"tech\") || lower.includes(\"code\") || lower.includes(\"software\") || lower.includes(\"automation\")) {\n      agent = \"project\";\n    } else if (lower.includes(\"recipe\") || lower.includes(\"food\") || lower.includes(\"cook\") || lower.includes(\"bake\")) {\n      agent = \"recipe\";\n    } else if (lower.includes(\"workout\") || lower.includes(\"fitness\") || lower.includes(\"gym\") || lower.includes(\"exercise\")) {\n      agent = \"workout\";\n    } else if (lower.includes(\"media\") || lower.includes(\"movie\") || lower.includes(\"film\") || lower.includes(\"watch\") || lower.includes(\"show\")) {\n      agent = \"media\";\n    } else {\n      agent = \"others\";\n    }\n  }\n\n  if (agent.includes(\"project\") || agent.includes(\"tech\") || agent.includes(\"code\")) {\n    agent = \"project\";\n  } else if (agent.includes(\"recipe\") || agent.includes(\"food\") || agent.includes(\"cook\")) {\n    agent = \"recipe\";\n  } else if (agent.includes(\"workout\") || agent.includes(\"fitness\") || agent.includes(\"gym\")) {\n    agent = \"workout\";\n  } else if (agent.includes(\"media\") || agent.includes(\"movie\") || agent.includes(\"watch\")) {\n    agent = \"media\";\n  } else {\n    agent = \"others\";\n  }\n\n  const origExtract = extractItems[index]?.json || extractItems[0]?.json || {};\n\n  let scrapeData = {};\n  if (scrapedItems.length > 0) {\n    const match = scrapedItems.find(s => s.json.messageId && s.json.messageId === origExtract.messageId) || scrapedItems[index] || scrapedItems[0];\n    if (match && match.json) {\n      scrapeData = match.json;\n    }\n  }\n\n  return {\n    json: {\n      ...origExtract,\n      ...scrapeData,\n      agent,\n      routerOutput: text\n    }\n  };\n});"
+        "jsCode": "const extractItems = $(\"Extract URLs\").all();\nlet scrapedItems = [];\ntry {\n  if ($(\"Parse Instagram (gallery-dl)\").isExecuted) {\n    scrapedItems = $(\"Parse Instagram (gallery-dl)\").all();\n  }\n} catch (e) {\n  scrapedItems = [];\n}\n\nreturn $input.all().map((item, index) => {\n  const text = item.json.text || item.json.response || item.json.output || \"\";\n  let agent = \"others\";\n\n  try {\n    const cleanText = text.replace(/```json/g, \"\").replace(/```/g, \"\").trim();\n    const parsed = JSON.parse(cleanText);\n    agent = (parsed.agent || \"others\").toLowerCase().trim();\n  } catch (e) {\n    const lower = text.toLowerCase();\n    if (lower.includes(\"anime\") || lower.includes(\"manhwa\") || lower.includes(\"manhua\") || lower.includes(\"manga\") || lower.includes(\"webtoon\")) {\n      agent = \"anime\";\n    } else if (lower.includes(\"project\") || lower.includes(\"tech\") || lower.includes(\"code\") || lower.includes(\"software\")) {\n      agent = \"project\";\n    } else if (lower.includes(\"recipe\") || lower.includes(\"food\") || lower.includes(\"cook\") || lower.includes(\"bake\")) {\n      agent = \"recipe\";\n    } else if (lower.includes(\"workout\") || lower.includes(\"fitness\") || lower.includes(\"gym\")) {\n      agent = \"workout\";\n    } else if (lower.includes(\"media\") || lower.includes(\"movie\") || lower.includes(\"film\") || lower.includes(\"show\")) {\n      agent = \"media\";\n    } else {\n      agent = \"others\";\n    }\n  }\n\n  if (agent.includes(\"anime\") || agent.includes(\"manhwa\") || agent.includes(\"manhua\") || agent.includes(\"manga\") || agent.includes(\"webtoon\")) {\n    agent = \"anime\";\n  } else if (agent.includes(\"project\") || agent.includes(\"tech\") || agent.includes(\"code\")) {\n    agent = \"project\";\n  } else if (agent.includes(\"recipe\") || agent.includes(\"food\") || agent.includes(\"cook\")) {\n    agent = \"recipe\";\n  } else if (agent.includes(\"workout\") || agent.includes(\"fitness\") || agent.includes(\"gym\")) {\n    agent = \"workout\";\n  } else if (agent.includes(\"media\") || agent.includes(\"movie\") || agent.includes(\"show\")) {\n    agent = \"media\";\n  } else {\n    agent = \"others\";\n  }\n\n  const origExtract = extractItems[index]?.json || extractItems[0]?.json || {};\n\n  let scrapeData = {};\n  if (scrapedItems.length > 0) {\n    const match = scrapedItems.find(s => s.json.messageId && s.json.messageId === origExtract.messageId) || scrapedItems[index] || scrapedItems[0];\n    if (match && match.json) {\n      scrapeData = match.json;\n    }\n  }\n\n  return {\n    json: {\n      ...origExtract,\n      ...scrapeData,\n      agent,\n      routerOutput: text\n    }\n  };\n});"
       },
       "id": "f15ab3c8-7553-4712-a936-4f4e0bee4333",
       "name": "Parse Router Output",
@@ -466,7 +466,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "3708f4d1-cdd3-426a-9b83-d688745df32d",
+                    "id": "r1",
                     "leftValue": "={{ $json.agent }}",
                     "rightValue": "recipe",
                     "operator": {
@@ -490,13 +490,12 @@
                 },
                 "conditions": [
                   {
-                    "id": "b4e3a423-0de6-4cf8-a12d-81acda79e634",
+                    "id": "r2",
                     "leftValue": "={{ $json.agent }}",
                     "rightValue": "project",
                     "operator": {
                       "type": "string",
-                      "operation": "equals",
-                      "name": "filter.operator.equals"
+                      "operation": "equals"
                     }
                   }
                 ],
@@ -515,13 +514,12 @@
                 },
                 "conditions": [
                   {
-                    "id": "9f5d5c12-398e-44cf-8405-5ecb7180f73a",
+                    "id": "r3",
                     "leftValue": "={{ $json.agent }}",
                     "rightValue": "workout",
                     "operator": {
                       "type": "string",
-                      "operation": "equals",
-                      "name": "filter.operator.equals"
+                      "operation": "equals"
                     }
                   }
                 ],
@@ -540,13 +538,36 @@
                 },
                 "conditions": [
                   {
-                    "id": "6a4761d8-620b-4c2c-9367-4faaa68b8403",
+                    "id": "r4",
+                    "leftValue": "={{ $json.agent }}",
+                    "rightValue": "anime",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Anime"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "r5",
                     "leftValue": "={{ $json.agent }}",
                     "rightValue": "media",
                     "operator": {
                       "type": "string",
-                      "operation": "equals",
-                      "name": "filter.operator.equals"
+                      "operation": "equals"
                     }
                   }
                 ],
@@ -565,7 +586,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "09b552bf-27cc-4f3f-abfa-9e6d3c7317e2",
+                    "id": "r6",
                     "leftValue": "={{ $json.agent }}",
                     "rightValue": "others",
                     "operator": {
@@ -652,7 +673,7 @@
         "messages": {
           "messageValues": [
             {
-              "message": "You are an intelligent AI Content Router for a Discord community.\n\nAnalyze the user's input across Caption, Comments, Spoken Video Audio, Page Text, and Image OCR, and route it to the single most appropriate specialty agent:\n\nCategories:\n1. \"project\": Software development, programming tutorials, tech products, AI tools, browser automation, GitHub repositories, coding libraries, system architecture, tech showcases, and developer tools.\n2. \"recipe\": Cooking recipes, culinary instructions, ingredients list, meal prep, food preparation, baking, cocktails, or restaurant dish breakdowns.\n3. \"workout\": Fitness routines, gym exercises, bodybuilding splits, weightlifting sets/reps, stretching, mobility, or workout plans.\n4. \"media\": Movies, TV shows, anime, manga, manhwa, manhua, webtoons, comics, novels, book/comic recommendations, film reviews, watchlist recommendations, trailers, entertainment, and streaming/reading suggestions.\n5. \"others\": General articles, news, interesting links, productivity tips, questions, memes, lifestyle, or anything else that doesn't fit the 4 categories above.\n\nReturn ONLY valid JSON in this format:\n{\"agent\": \"category_name\"}"
+              "message": "You are an intelligent AI Content Router for a Discord community.\n\nAnalyze the user's input across Caption, Comments, Spoken Video Audio, Page Text, and Image OCR, and route it to the single most appropriate specialty agent:\n\nCategories:\n1. \"project\": Software development, programming tutorials, tech products, AI tools, browser automation, GitHub repositories, coding libraries, system architecture, tech showcases, and developer tools.\n2. \"recipe\": Cooking recipes, culinary instructions, ingredients list, meal prep, food preparation, baking, cocktails, or restaurant dish breakdowns.\n3. \"workout\": Fitness routines, gym exercises, bodybuilding splits, weightlifting sets/reps, stretching, mobility, or workout plans.\n4. \"anime\": Anime, Manga, Manhwa, Manhua, Webtoons, Light Novels, comic recommendations, and animation reviews.\n5. \"media\": Movies, TV shows, live-action series, documentaries, cinema, film reviews, watchlist recommendations, trailers, and general entertainment.\n6. \"others\": General articles, news, interesting links, productivity tips, questions, memes, lifestyle, or anything else that doesn't fit the 5 categories above.\n\nReturn ONLY valid JSON in this format:\n{\"agent\": \"category_name\"}"
             }
           ]
         },
@@ -824,6 +845,141 @@
       "id": "discord-webhook-trigger-001",
       "name": "Discord Webhook Intake",
       "webhookId": "discord-intake"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section (Pinned & Creator Comments):\n{{ $json.comments || \"\" }}\n\nSpoken Video Audio Transcript (Spoken Dialogue):\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text / On-Screen Details:\n{{ $json.onScreenText || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are AnimeGPT. Create a structured recommendation card for Anime, Manga, Manhwa, Manhua, and Webtoons.\n\nSmart Identification Rules:\n- Search across Caption, Pinned/Top Comments, and Spoken Video Audio for all comic and animation titles (e.g. 'The Boxer', 'The Spark in Your Eyes / Blinded By The Setting Sun', 'Legend of the Northern Blade', 'Sweet Home', 'The House Without Time', 'Solo Leveling', 'Tower of God', etc.).\n- List EVERY featured/recommended series mentioned by the creator or in the comments.\n- Note the origin format if mentioned (Manhwa = Korea, Manhua = China, Manga = Japan, Anime = Animation).\n\nFormat:\n**\ud83c\udf8c [Topic / Main Spotlight Title]** \u2022 *[Format: Manhwa / Manhua / Manga / Anime] \u2022 [Genres]*\n\n**\ud83d\udcd6 Overview:**\n[2-3 sentence overview of the series or list]\n\n**\u2b50 Featured / Recommended Titles:**\n\u2022 **[Title 1]**: [Short note, origin format, or context from caption/comments]\n\u2022 **[Title 2]**: [Short note, origin format, or context from caption/comments]\n\u2022 **[Title 3]**: [Short note, origin format, or context from caption/comments]\n(Include ALL recommended titles from caption and comments)\n\n**\ud83d\udcd6 Where to Read / Watch:** [Platform / Webtoon / Crunchyroll / etc.]\n**\ud83d\udd17 Source:** [Link if available]"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2832,
+        2220
+      ],
+      "id": "anime-chain-llm-node-001",
+      "name": "Basic LLM Chain (Anime)"
+    },
+    {
+      "parameters": {
+        "jsCode": "function chunkMarkdown(text, maxLen = 1850) {\n  text = (text || \"\").trim();\n  if (text.length <= maxLen) return [text];\n\n  const chunks = [];\n  let remaining = text;\n\n  while (remaining.length > maxLen) {\n    let splitIdx = remaining.lastIndexOf('\\n\\n', maxLen);\n    if (splitIdx === -1 || splitIdx < maxLen * 0.4) {\n      splitIdx = remaining.lastIndexOf('\\n', maxLen);\n    }\n    if (splitIdx === -1 || splitIdx < maxLen * 0.4) {\n      splitIdx = remaining.lastIndexOf('. ', maxLen);\n      if (splitIdx !== -1) splitIdx += 1;\n    }\n    if (splitIdx === -1 || splitIdx < maxLen * 0.4) {\n      splitIdx = remaining.lastIndexOf(' ', maxLen);\n    }\n    if (splitIdx === -1 || splitIdx <= 0) {\n      splitIdx = maxLen;\n    }\n\n    const chunk = remaining.slice(0, splitIdx).trim();\n    if (chunk) chunks.push(chunk);\n    remaining = remaining.slice(splitIdx).trim();\n  }\n\n  if (remaining) {\n    chunks.push(remaining);\n  }\n\n  if (chunks.length > 1) {\n    return chunks.map((c, i) => `${c}\\n\\n*(Part ${i + 1}/${chunks.length})*`);\n  }\n  return chunks;\n}\n\nconst results = [];\nfor (const item of $input.all()) {\n  let title = item.json.title || \"\";\n  let markdown = item.json.markdown || item.json.text || item.json.response || item.json.output || \"\";\n  markdown = markdown.trim();\n\n  if (!markdown || markdown.length < 5) {\n    markdown = \"**Update:** Details received, but no detailed summary could be extracted.\";\n  }\n\n  const chunks = chunkMarkdown(markdown, 1850);\n  for (let i = 0; i < chunks.length; i++) {\n    results.push({\n      json: {\n        ...item.json,\n        title: title,\n        markdown: chunks[i],\n        finalContent: chunks[i],\n        partIndex: i + 1,\n        totalParts: chunks.length\n      }\n    });\n  }\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3056,
+        2220
+      ],
+      "id": "limit-anime-node-001",
+      "name": "Limit Anime Length"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "1527074193269592206",
+          "mode": "list",
+          "cachedResultName": "AutoBot",
+          "cachedResultUrl": "https://discord.com/channels/1527074193269592206"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "1538893352668233789",
+          "mode": "list",
+          "cachedResultName": "anime-manhua",
+          "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1538893352668233789"
+        },
+        "content": "={{ $json.finalContent || $json.markdown }}",
+        "options": {},
+        "embeds": {
+          "values": []
+        }
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        2220
+      ],
+      "id": "create-anime-post-node-001",
+      "name": "Create Anime Post",
+      "credentials": {
+        "discordBotApi": {
+          "id": "Zr8t8Yruimx7lO52",
+          "name": "Discord Bot account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        2750
+      ],
+      "id": "error-trigger-node-001",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const execution = item.json.execution || {};\n  const workflow = item.json.workflow || {};\n  const lastNode = execution.lastNodeExecuted || \"Unknown Node\";\n  const error = execution.error || item.json.error || {};\n  const errorMessage = error.message || error.description || \"An unexpected error occurred.\";\n  const stack = error.stack || \"\";\n\n  const text = `\ud83d\udea8 **Workflow Error Alert**\n\n**Workflow:** ${workflow.name || \"Discord AI Multi-Agent Router\"}\n**Failed Node:** \\`${lastNode}\\`\n**Error Message:** ${errorMessage}\n**Execution ID:** \\`${execution.id || \"N/A\"}\\`\n${stack ? \"```\\n\" + stack.slice(0, 500) + \"\\n```\" : \"\"}\n**Timestamp:** ${new Date().toISOString()}`;\n\n  return {\n    json: {\n      errorText: text\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        2750
+      ],
+      "id": "format-error-node-001",
+      "name": "Format Error Alert"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "1527074193269592206",
+          "mode": "list",
+          "cachedResultName": "AutoBot",
+          "cachedResultUrl": "https://discord.com/channels/1527074193269592206"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "1538862861718261900",
+          "mode": "list",
+          "cachedResultName": "error-log",
+          "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1538862861718261900"
+        },
+        "content": "={{ $json.errorText }}",
+        "options": {},
+        "embeds": {
+          "values": []
+        }
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        2750
+      ],
+      "id": "create-error-post-node-001",
+      "name": "Send Error to Discord",
+      "credentials": {
+        "discordBotApi": {
+          "id": "Zr8t8Yruimx7lO52",
+          "name": "Discord Bot account"
+        }
+      }
     }
   ],
   "connections": {
@@ -1028,6 +1184,13 @@
         ],
         [
           {
+            "node": "Basic LLM Chain (Anime)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Basic LLM Chain (Media)",
             "type": "main",
             "index": 0
@@ -1169,6 +1332,11 @@
             "node": "Basic LLM Chain (Others)",
             "type": "ai_languageModel",
             "index": 0
+          },
+          {
+            "node": "Basic LLM Chain (Anime)",
+            "type": "ai_languageModel",
+            "index": 0
           }
         ]
       ]
@@ -1178,6 +1346,50 @@
         [
           {
             "node": "Extract URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain (Anime)": {
+      "main": [
+        [
+          {
+            "node": "Limit Anime Length",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit Anime Length": {
+      "main": [
+        [
+          {
+            "node": "Create Anime Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Error to Discord",
             "type": "main",
             "index": 0
           }
