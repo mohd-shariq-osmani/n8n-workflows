@@ -47,7 +47,6 @@ def get_exact_imdb_url(query):
     if not query or len(query.strip()) < 2:
         return ""
     try:
-        # Normalize Unicode fancy letters (e.g. math bold 𝐓𝐢𝐭𝐥𝐞)
         query = unicodedata.normalize('NFKD', query)
         clean = ''.join(c.lower() for c in query if c.isalnum() or c.isspace()).strip()
         clean = clean.replace(' ', '_')
@@ -66,33 +65,57 @@ def get_exact_imdb_url(query):
         pass
     return ""
 
-def search_github_repo(query):
-    if not query or len(query.strip()) < 3:
+def clean_project_query(text):
+    if not text:
         return ""
-    query = unicodedata.normalize('NFKD', query).strip()
-    
-    # 1. Direct GitHub API search
-    try:
-        api_url = f"https://api.github.com/search/repositories?q={urllib.parse.quote(query)}&sort=stars&order=desc&per_page=3"
-        req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            items = data.get("items", [])
-            if items:
-                return items[0].get("html_url")
-    except Exception:
-        pass
+    # Strip engagement bait lines
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    filtered = []
+    for l in lines:
+        if re.search(r'(comment\s+[\"“\']|dm\s+me|link\s+in\s+bio|save\s+this|follow\s+for|double\s+tap|send\s+you|download\s+link)', l, re.IGNORECASE):
+            continue
+        filtered.append(l)
 
-    # 2. DuckDuckGo lite search fallback
+    cleaned = " ".join(filtered)
+    # Check for pattern e.g. "Orca is an open-source..."
+    m = re.search(r'([A-Za-z0-9\-_]{2,25})\s+is\s+an?\s+(?:open[\-\s]source|ai|tool|framework|library|workstation|app|orchestrator|ide|system)', cleaned, re.IGNORECASE)
+    if m:
+        return f"{m.group(1)} open source"
+
+    # Take first clean sentence
+    first_chunk = filtered[0] if filtered else text.split("\n")[0]
+    first_chunk = re.sub(r'[#@\(\)🟢🔥🚀✨💡]', '', first_chunk).strip()
+    return first_chunk[:60]
+
+def search_github_repo(query):
+    if not query or len(query.strip()) < 2:
+        return ""
+    
+    clean_q = clean_project_query(query)
+    if not clean_q:
+        clean_q = query.strip()
+
+    # Search DuckDuckGo HTML using BeautifulSoup
     try:
-        post_data = urllib.parse.urlencode({"q": f"{query} site:github.com"}).encode("utf-8")
-        req = urllib.request.Request("https://lite.duckduckgo.com/lite/", data=post_data, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            content = resp.read().decode("utf-8", errors="ignore")
-            matches = re.findall(r'(https://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+)', content)
-            for m in matches:
-                if not any(bad in m for bad in ["/features", "/pricing", "/about", "/collections", "/trending", "/topics"]):
-                    return m
+        url = "https://html.duckduckgo.com/html/"
+        data = urllib.parse.urlencode({"q": f"{clean_q} github"}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                "Referer": "https://html.duckduckgo.com/"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            soup = BeautifulSoup(resp.read().decode("utf-8", errors="ignore"), "html.parser")
+            for a in soup.find_all("a", class_="result__snippet") + soup.find_all("a", class_="result__url"):
+                href = a.get("href", "") or a.get_text()
+                m = re.search(r'(https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+)', href)
+                if m:
+                    u = m.group(1).replace("http://", "https://")
+                    if not any(b in u.lower() for b in ["/features", "/pricing", "/about", "/collections", "/trending", "/topics", "/sponsors", "/login"]):
+                        return u
     except Exception:
         pass
 
@@ -178,7 +201,6 @@ def extract_instagram_comments(shortcode, cookies_path, max_comments=100):
     return ""
 
 def find_imdb_in_text(caption_text, comments_text=""):
-    # 1. Search normalized caption first (highest priority)
     if caption_text:
         norm_cap = unicodedata.normalize('NFKD', caption_text)
         cap_patterns = [
@@ -194,7 +216,6 @@ def find_imdb_in_text(caption_text, comments_text=""):
                     if url:
                         return url
 
-    # 2. Search comments if not found in caption
     if comments_text:
         comm_patterns = [
             r'(?:movie(?:\s+name)?[:\s\-]+)([A-Za-z0-9\'\s]{3,40})',
@@ -331,7 +352,6 @@ def scrape_youtube(url):
     elif result["title"] and any(k in combined_text.lower() for k in ["github", "tool", "project", "open source", "library", "code", "ai"]):
         result["githubUrl"] = search_github_repo(result["title"])
 
-    # Resolve exact IMDb URL
     if result["title"]:
         result["imdbUrl"] = get_exact_imdb_url(result["title"])
     if not result["imdbUrl"]:
@@ -447,11 +467,9 @@ def scrape_instagram(url):
     gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
     if gh_match:
         result["githubUrl"] = gh_match.group(0)
-    elif any(k in combined_text.lower() for k in ["github", "repo", "open source", "developer tool", "code repository", "library"]):
-        first_line = result["caption"].split("\n")[0] if result["caption"] else ""
-        first_clean = re.sub(r'[#@\(\)]', '', first_line).strip()
-        if len(first_clean) > 5:
-            result["githubUrl"] = search_github_repo(first_clean)
+    elif any(k in combined_text.lower() for k in ["github", "repo", "open source", "developer tool", "code repository", "library", "workstation", "orchestrator", "ai tool"]):
+        search_target = result["caption"] or result["onScreenText"] or result["title"]
+        result["githubUrl"] = search_github_repo(search_target)
 
     # Search IMDb from normalized Caption first, then Comments
     result["imdbUrl"] = find_imdb_in_text(result["caption"], result["comments"])
