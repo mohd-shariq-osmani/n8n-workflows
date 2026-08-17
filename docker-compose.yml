@@ -29,7 +29,7 @@ services:
       - "n8n:5678"
       - "--url=customize-crouton-mobility.ngrok-free.dev"
     environment:
-      - NGROK_AUTHTOKEN=3F0NHo5EISVT6d2la3SFwdzRd6h_3LArJF4mBAaPqzJSY3iN1
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     depends_on:
       - n8n
 
@@ -37,8 +37,8 @@ services:
     build: ./discord-bot
     restart: always
     environment:
-      - DISCORD_BOT_TOKEN=K0PKiQltTILdVpNlaZ6F7N916IZg37BJ
-      - DISCORD_CHANNEL_ID=1527074193823498283
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-1527074193823498283}
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/discord-intake
     depends_on:
       - n8n

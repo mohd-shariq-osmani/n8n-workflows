@@ -60,7 +60,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cp = require('child_process');\n\nreturn $input.all().map(item => {\n  const json = item.json;\n  const content = json.content || '';\n  const rawUrls = content.match(/https?:\\/\\/\\S+/g) || [];\n  const urls = rawUrls.map(u => u.replace(/[)>.,;!?]+$/, ''));\n  const hasUrl = urls.length > 0;\n  const firstUrl = hasUrl ? urls[0] : '';\n  const igMatch = content.match(/https?:\\/\\/(?:www\\.)?instagram\\.com\\/\\S+/i);\n  let instagramUrl = urls.find(u => u.includes('instagram.com')) || (igMatch ? igMatch[0].replace(/[)>.,;!?]+$/, '') : '');\n\n  let imageText = \"\";\n  const attachments = json.attachments || [];\n  for (const att of attachments) {\n    if (att.url && (att.content_type?.startsWith('image/') || att.filename?.match(/\\.(jpg|jpeg|png|webp|gif)$/i))) {\n      try {\n        const out = cp.execSync(`python3 /usr/local/bin/analyze_image.py \"${att.url}\"`, { timeout: 15000 }).toString();\n        const res = JSON.parse(out);\n        if (res.imageText) {\n          imageText += (imageText ? ' | ' : '') + res.imageText;\n        }\n      } catch (err) {\n        // Fallback\n      }\n    }\n  }\n\n  let fullContent = content;\n  if (imageText) {\n    fullContent = fullContent ? `${fullContent}\\n\\n[Extracted Text from Uploaded Image]:\\n${imageText}` : `[Extracted Text from Uploaded Image]:\\n${imageText}`;\n  }\n\n  return {\n    json: {\n      ...json,\n      content: fullContent,\n      urls,\n      firstUrl,\n      hasUrl,\n      instagramUrl,\n      imageText\n    }\n  };\n});"
+        "jsCode": "const cp = require('child_process');\n\nreturn $input.all().map(item => {\n  const json = item.json.body || item.json;\n  const content = json.content || '';\n  const messageId = json.messageId || json.id || '';\n  const author = json.authorUsername || json.author?.username || json.author || 'DiscordUser';\n  \n  const rawUrls = content.match(/https?:\\/\\/\\S+/g) || [];\n  const urls = rawUrls.map(u => u.replace(/[)>.,;!?]+$/, ''));\n  const hasUrl = urls.length > 0;\n  const firstUrl = hasUrl ? urls[0] : '';\n  const igMatch = content.match(/https?:\\/\\/(?:www\\.)?instagram\\.com\\/\\S+/i);\n  let instagramUrl = urls.find(u => u.includes('instagram.com')) || (igMatch ? igMatch[0].replace(/[)>.,;!?]+$/, '') : '');\n\n  let imageText = \"\";\n  const attachments = json.attachments || [];\n  for (const att of attachments) {\n    const isImage = (att.contentType && att.contentType.startsWith('image/')) ||\n                    (att.content_type && att.content_type.startsWith('image/')) ||\n                    (att.name && att.name.match(/\\.(jpg|jpeg|png|webp|gif)$/i)) ||\n                    (att.filename && att.filename.match(/\\.(jpg|jpeg|png|webp|gif)$/i)) ||\n                    (att.url && att.url.match(/\\.(jpg|jpeg|png|webp|gif)/i));\n\n    if (att.url && isImage) {\n      try {\n        const out = cp.execSync(`python3 /usr/local/bin/analyze_image.py \"${att.url}\"`, { timeout: 20000 }).toString();\n        const res = JSON.parse(out);\n        if (res.imageText) {\n          imageText += (imageText ? '\\n' : '') + res.imageText;\n        }\n      } catch (err) {\n        // Fallback\n      }\n    }\n  }\n\n  let fullContent = content;\n  if (imageText) {\n    fullContent = fullContent ? `${fullContent}\\n\\n[Extracted Text from Uploaded Image]:\\n${imageText}` : `[Extracted Text from Uploaded Image]:\\n${imageText}`;\n  }\n\n  return {\n    json: {\n      ...json,\n      messageId,\n      author,\n      content: fullContent,\n      urls,\n      firstUrl,\n      hasUrl,\n      instagramUrl,\n      imageText\n    }\n  };\n});"
       },
       "id": "18e3b263-4e8f-4961-82c3-d8afef130380",
       "name": "Extract URLs",
@@ -807,6 +807,23 @@
           "name": "OpenAI account"
         }
       }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "discord-intake",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        480,
+        2192
+      ],
+      "id": "discord-webhook-trigger-001",
+      "name": "Discord Webhook Intake",
+      "webhookId": "discord-intake"
     }
   ],
   "connections": {
@@ -1151,6 +1168,17 @@
           {
             "node": "Basic LLM Chain (Others)",
             "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord Webhook Intake": {
+      "main": [
+        [
+          {
+            "node": "Extract URLs",
+            "type": "main",
             "index": 0
           }
         ]
