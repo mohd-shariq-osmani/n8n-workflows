@@ -166,7 +166,6 @@ def extract_instagram_comments(shortcode, cookies_path, max_comments=75):
             req = urllib.request.Request(url, headers=headers)
             
             try:
-                # Add human jitter between requests (1.2s - 2.2s) to avoid bot detection
                 if page > 1:
                     time.sleep(random.uniform(1.2, 2.2))
 
@@ -386,21 +385,58 @@ def scrape_instagram(url):
     shortcode_match = re.search(r'/(?:p|reel|tv)/([A-Za-z0-9_-]+)', url)
     shortcode = shortcode_match.group(1) if shortcode_match else ""
 
-    # 1. Try unauthenticated yt-dlp first for public reel metadata & stream (Zero account risk!)
-    try:
-        cmd_ytdlp = ["yt-dlp", "--dump-single-json", "--skip-download", "--no-warnings", url]
-        proc_y = subprocess.run(cmd_ytdlp, capture_output=True, text=True, timeout=15)
-        if proc_y.stdout.strip():
-            meta_y = json.loads(proc_y.stdout)
-            result["caption"] = meta_y.get("description") or ""
-            result["author"] = meta_y.get("uploader") or meta_y.get("channel") or ""
-            result["imageUrl"] = meta_y.get("thumbnail") or ""
-            result["likes"] = meta_y.get("like_count", 0)
-            result["tags"] = meta_y.get("tags", [])
-    except Exception:
-        pass
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # 1. Fetch Metadata with yt-dlp (fast & unauthenticated)
+        try:
+            cmd_meta = ["yt-dlp", "--dump-single-json", "--skip-download", "--no-warnings", url]
+            proc_meta = subprocess.run(cmd_meta, capture_output=True, text=True, timeout=20)
+            if proc_meta.stdout.strip():
+                meta_y = json.loads(proc_meta.stdout)
+                result["caption"] = meta_y.get("description") or meta_y.get("title") or ""
+                result["author"] = meta_y.get("uploader") or meta_y.get("channel") or ""
+                result["imageUrl"] = meta_y.get("thumbnail") or ""
+                result["likes"] = meta_y.get("like_count", 0)
+                result["tags"] = meta_y.get("tags", [])
+        except Exception:
+            pass
 
-    # 2. If caption not found, fallback to gallery-dl with cookies
+        # 2. Download Video Stream directly with yt-dlp
+        video_out = os.path.join(tmpdir, "video.mp4")
+        try:
+            cmd_dl = ["yt-dlp", "--no-warnings", "-o", video_out, url]
+            subprocess.run(cmd_dl, capture_output=True, text=True, timeout=45)
+        except Exception:
+            pass
+
+        # 3. Transcribe Spoken Video Audio with SpeechRecognition
+        if os.path.exists(video_out) and os.path.getsize(video_out) > 1000:
+            try:
+                audio_file = os.path.join(tmpdir, "audio.wav")
+                subprocess.run(["ffmpeg", "-y", "-i", video_out, "-vn", "-ar", "16000", "-ac", "1", audio_file], capture_output=True)
+                if os.path.exists(audio_file):
+                    result["spokenTranscript"] = transcribe_audio_file(audio_file)
+            except Exception:
+                pass
+
+            # 4. Extract On-Screen Keyframes with Tesseract OCR
+            try:
+                frame_pattern = os.path.join(tmpdir, "frame_%02d.jpg")
+                subprocess.run(["ffmpeg", "-y", "-i", video_out, "-vf", "fps=0.5,scale=1280:-1", frame_pattern], capture_output=True)
+                import pytesseract
+                from PIL import Image
+                frames = sorted(glob.glob(os.path.join(tmpdir, "frame_*.jpg")))
+                ocr_texts = []
+                for f in frames[:8]:
+                    t = pytesseract.image_to_string(Image.open(f))
+                    clean = " ".join(t.split())
+                    if len(clean) > 4 and clean not in ocr_texts:
+                        ocr_texts.append(clean)
+                if ocr_texts:
+                    result["onScreenText"] = " | ".join(ocr_texts[:4])
+            except Exception:
+                pass
+
+    # 5. Fallback metadata via gallery-dl if caption still empty
     if not result["caption"]:
         cmd_json = ["gallery-dl", "-j", "--no-download"]
         if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 100:
@@ -408,7 +444,7 @@ def scrape_instagram(url):
         cmd_json.append(url)
 
         try:
-            proc = subprocess.run(cmd_json, capture_output=True, text=True, timeout=30)
+            proc = subprocess.run(cmd_json, capture_output=True, text=True, timeout=20)
             stdout = proc.stdout
             if stdout.strip():
                 raw = json.loads(stdout)
@@ -422,62 +458,16 @@ def scrape_instagram(url):
                                 result["imageUrl"] = data.get("display_url") or data.get("thumbnail") or ""
                             if not result["author"]:
                                 result["author"] = data.get("username") or data.get("author") or ""
-                            if data.get("likes"):
-                                result["likes"] = data.get("likes")
-                            if data.get("tags"):
-                                result["tags"] = data.get("tags")
-        except Exception as e:
-            result["error"] = str(e)
+        except Exception:
+            pass
 
-    # 3. Extract Full Paginated Comments safely with rate-limiting & jitter
+    # 6. Extract Comments safely
     if shortcode:
         comments_text = extract_instagram_comments(shortcode, cookies_path, max_comments=75)
         if comments_text:
             result["comments"] = comments_text
 
-    # 4. Audio & Video frames OCR
-    with tempfile.TemporaryDirectory() as tmpdir:
-        cmd_dl = ["gallery-dl", "--dest", tmpdir]
-        if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 100:
-            cmd_dl.extend(["--cookies", cookies_path])
-        cmd_dl.append(url)
-
-        try:
-            subprocess.run(cmd_dl, capture_output=True, text=True, timeout=60)
-            mp4_files = glob.glob(f"{tmpdir}/**/*.mp4", recursive=True)
-            if mp4_files:
-                video_file = mp4_files[0]
-                audio_file = os.path.join(tmpdir, "audio.wav")
-                subprocess.run(["ffmpeg", "-y", "-i", video_file, "-vn", "-ar", "16000", "-ac", "1", audio_file], capture_output=True)
-                if os.path.exists(audio_file) and os.path.getsize(audio_file) > 1000:
-                    try:
-                        import speech_recognition as sr
-                        r = sr.Recognizer()
-                        with sr.AudioFile(audio_file) as source:
-                            audio_data = r.record(source)
-                        result["spokenTranscript"] = r.recognize_google(audio_data)
-                    except Exception:
-                        pass
-
-                try:
-                    frame_pattern = os.path.join(tmpdir, "frame_%02d.jpg")
-                    subprocess.run(["ffmpeg", "-y", "-i", video_file, "-vf", "fps=0.5,scale=1280:-1", frame_pattern], capture_output=True)
-                    import pytesseract
-                    from PIL import Image
-                    frames = sorted(glob.glob(os.path.join(tmpdir, "frame_*.jpg")))
-                    ocr_texts = []
-                    for f in frames[:6]:
-                        text = pytesseract.image_to_string(Image.open(f))
-                        clean = " ".join(text.split())
-                        if len(clean) > 5 and clean not in ocr_texts:
-                            ocr_texts.append(clean)
-                    if ocr_texts:
-                        result["onScreenText"] = " | ".join(ocr_texts[:3])
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
+    # 7. Check for GitHub and IMDb links
     combined_text = f"{result['caption']} {result['comments']} {result['spokenTranscript']} {result['onScreenText']}"
     gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
     if gh_match:
