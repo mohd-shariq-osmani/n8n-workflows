@@ -6,6 +6,8 @@ import subprocess
 import re
 import tempfile
 import glob
+import time
+import random
 import urllib.request
 import urllib.parse
 import http.cookiejar
@@ -68,7 +70,6 @@ def get_exact_imdb_url(query):
 def clean_project_query(text):
     if not text:
         return ""
-    # Strip engagement bait lines
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     filtered = []
     for l in lines:
@@ -77,12 +78,10 @@ def clean_project_query(text):
         filtered.append(l)
 
     cleaned = " ".join(filtered)
-    # Check for pattern e.g. "Orca is an open-source..."
     m = re.search(r'([A-Za-z0-9\-_]{2,25})\s+is\s+an?\s+(?:open[\-\s]source|ai|tool|framework|library|workstation|app|orchestrator|ide|system)', cleaned, re.IGNORECASE)
     if m:
         return f"{m.group(1)} open source"
 
-    # Take first clean sentence
     first_chunk = filtered[0] if filtered else text.split("\n")[0]
     first_chunk = re.sub(r'[#@\(\)🟢🔥🚀✨💡]', '', first_chunk).strip()
     return first_chunk[:60]
@@ -95,7 +94,6 @@ def search_github_repo(query):
     if not clean_q:
         clean_q = query.strip()
 
-    # Search DuckDuckGo HTML using BeautifulSoup
     try:
         url = "https://html.duckduckgo.com/html/"
         data = urllib.parse.urlencode({"q": f"{clean_q} github"}).encode("utf-8")
@@ -121,8 +119,8 @@ def search_github_repo(query):
 
     return ""
 
-def extract_instagram_comments(shortcode, cookies_path, max_comments=100):
-    """Extract full paginated comments (up to 100) from Instagram post using GraphQL."""
+def extract_instagram_comments(shortcode, cookies_path, max_comments=75):
+    """Extract comments safely with rate-limiting, jitter, and browser fingerprinting."""
     if not os.path.exists(cookies_path) or not shortcode:
         return ""
     
@@ -142,59 +140,64 @@ def extract_instagram_comments(shortcode, cookies_path, max_comments=100):
             "X-ASBD-ID": "129477",
             "X-CSRFToken": csrf,
             "X-Requested-With": "XMLHttpRequest",
-            "Referer": f"https://www.instagram.com/p/{shortcode}/"
+            "Referer": f"https://www.instagram.com/p/{shortcode}/",
+            "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"macOS"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "Accept-Language": "en-US,en;q=0.9"
         }
 
-        query_hashes = [
-            "bc3296d1ce80a24b1b6e40b1e72903f5",
-            "b3055c2c9da449f818460d4d3d424125",
-            "97b41c52304d77ce08d4debc940da588"
-        ]
+        query_hash = "bc3296d1ce80a24b1b6e40b1e72903f5"
+        all_comments = []
+        has_next = True
+        cursor = None
+        page = 1
 
-        for qh in query_hashes:
-            all_comments = []
-            has_next = True
-            cursor = None
-            page = 1
+        while has_next and len(all_comments) < max_comments and page <= 3:
+            vars_dict = {"shortcode": shortcode, "first": 40}
+            if cursor:
+                vars_dict["after"] = cursor
+            
+            encoded_vars = urllib.parse.quote(json.dumps(vars_dict))
+            url = f"https://www.instagram.com/graphql/query/?query_hash={query_hash}&variables={encoded_vars}"
+            req = urllib.request.Request(url, headers=headers)
+            
+            try:
+                # Add human jitter between requests (1.2s - 2.2s) to avoid bot detection
+                if page > 1:
+                    time.sleep(random.uniform(1.2, 2.2))
 
-            while has_next and len(all_comments) < max_comments and page <= 5:
-                vars_dict = {"shortcode": shortcode, "first": 50}
-                if cursor:
-                    vars_dict["after"] = cursor
-                
-                encoded_vars = urllib.parse.quote(json.dumps(vars_dict))
-                url = f"https://www.instagram.com/graphql/query/?query_hash={qh}&variables={encoded_vars}"
-                req = urllib.request.Request(url, headers=headers)
-                
-                try:
-                    with opener.open(req, timeout=10) as resp:
-                        raw = resp.read().decode("utf-8")
-                        data = json.loads(raw)
-                        comment_data = data.get("data", {}).get("shortcode_media", {}).get("edge_media_to_parent_comment", {})
-                        edges = comment_data.get("edges", [])
-                        page_info = comment_data.get("page_info", {})
-                        
-                        if not edges:
-                            break
+                with opener.open(req, timeout=10) as resp:
+                    raw = resp.read().decode("utf-8")
+                    data = json.loads(raw)
+                    comment_data = data.get("data", {}).get("shortcode_media", {}).get("edge_media_to_parent_comment", {})
+                    edges = comment_data.get("edges", [])
+                    page_info = comment_data.get("page_info", {})
+                    
+                    if not edges:
+                        break
 
-                        for e in edges:
-                            node = e.get("node", {})
-                            u = node.get("owner", {}).get("username", "user")
-                            t = node.get("text", "").strip()
-                            if t and not any(t in existing for existing in all_comments):
-                                if node.get("is_pinned") or node.get("is_pinned_by_creator"):
-                                    all_comments.append(f"[PINNED by @{u}]: {t}")
-                                else:
-                                    all_comments.append(f"@{u}: {t}")
-                        
-                        has_next = page_info.get("has_next_page", False)
-                        cursor = page_info.get("end_cursor")
-                        page += 1
-                except Exception:
-                    break
+                    for e in edges:
+                        node = e.get("node", {})
+                        u = node.get("owner", {}).get("username", "user")
+                        t = node.get("text", "").strip()
+                        if t and not any(t in existing for existing in all_comments):
+                            if node.get("is_pinned") or node.get("is_pinned_by_creator"):
+                                all_comments.append(f"[PINNED by @{u}]: {t}")
+                            else:
+                                all_comments.append(f"@{u}: {t}")
+                    
+                    has_next = page_info.get("has_next_page", False)
+                    cursor = page_info.get("end_cursor")
+                    page += 1
+            except Exception:
+                break
 
-            if all_comments:
-                return "\n".join(all_comments)
+        if all_comments:
+            return "\n".join(all_comments)
 
     except Exception:
         pass
@@ -344,7 +347,6 @@ def scrape_youtube(url):
             except Exception:
                 pass
 
-    # Check for GitHub and IMDb links
     combined_text = f"{result['title']} {result['caption']} {result['spokenTranscript']}"
     gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
     if gh_match:
@@ -381,45 +383,59 @@ def scrape_instagram(url):
         "error": None
     }
 
-    # Extract shortcode
     shortcode_match = re.search(r'/(?:p|reel|tv)/([A-Za-z0-9_-]+)', url)
     shortcode = shortcode_match.group(1) if shortcode_match else ""
 
-    # 1. Metadata
-    cmd_json = ["gallery-dl", "-j", "--no-download"]
-    if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 100:
-        cmd_json.extend(["--cookies", cookies_path])
-    cmd_json.append(url)
-
+    # 1. Try unauthenticated yt-dlp first for public reel metadata & stream (Zero account risk!)
     try:
-        proc = subprocess.run(cmd_json, capture_output=True, text=True, timeout=30)
-        stdout = proc.stdout
-        if stdout.strip():
-            raw = json.loads(stdout)
-            if isinstance(raw, list):
-                for entry in raw:
-                    data = entry[1] if isinstance(entry, list) and len(entry) >= 2 and isinstance(entry[1], dict) else (entry if isinstance(entry, dict) else {})
-                    if data:
-                        if not result["caption"]:
-                            result["caption"] = data.get("description") or data.get("caption") or ""
-                        if not result["imageUrl"]:
-                            result["imageUrl"] = data.get("display_url") or data.get("thumbnail") or ""
-                        if not result["author"]:
-                            result["author"] = data.get("username") or data.get("author") or ""
-                        if data.get("likes"):
-                            result["likes"] = data.get("likes")
-                        if data.get("tags"):
-                            result["tags"] = data.get("tags")
-    except Exception as e:
-        result["error"] = str(e)
+        cmd_ytdlp = ["yt-dlp", "--dump-single-json", "--skip-download", "--no-warnings", url]
+        proc_y = subprocess.run(cmd_ytdlp, capture_output=True, text=True, timeout=15)
+        if proc_y.stdout.strip():
+            meta_y = json.loads(proc_y.stdout)
+            result["caption"] = meta_y.get("description") or ""
+            result["author"] = meta_y.get("uploader") or meta_y.get("channel") or ""
+            result["imageUrl"] = meta_y.get("thumbnail") or ""
+            result["likes"] = meta_y.get("like_count", 0)
+            result["tags"] = meta_y.get("tags", [])
+    except Exception:
+        pass
 
-    # 2. Extract Full Paginated Comments (up to 100) via GraphQL
+    # 2. If caption not found, fallback to gallery-dl with cookies
+    if not result["caption"]:
+        cmd_json = ["gallery-dl", "-j", "--no-download"]
+        if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 100:
+            cmd_json.extend(["--cookies", cookies_path])
+        cmd_json.append(url)
+
+        try:
+            proc = subprocess.run(cmd_json, capture_output=True, text=True, timeout=30)
+            stdout = proc.stdout
+            if stdout.strip():
+                raw = json.loads(stdout)
+                if isinstance(raw, list):
+                    for entry in raw:
+                        data = entry[1] if isinstance(entry, list) and len(entry) >= 2 and isinstance(entry[1], dict) else (entry if isinstance(entry, dict) else {})
+                        if data:
+                            if not result["caption"]:
+                                result["caption"] = data.get("description") or data.get("caption") or ""
+                            if not result["imageUrl"]:
+                                result["imageUrl"] = data.get("display_url") or data.get("thumbnail") or ""
+                            if not result["author"]:
+                                result["author"] = data.get("username") or data.get("author") or ""
+                            if data.get("likes"):
+                                result["likes"] = data.get("likes")
+                            if data.get("tags"):
+                                result["tags"] = data.get("tags")
+        except Exception as e:
+            result["error"] = str(e)
+
+    # 3. Extract Full Paginated Comments safely with rate-limiting & jitter
     if shortcode:
-        comments_text = extract_instagram_comments(shortcode, cookies_path, max_comments=100)
+        comments_text = extract_instagram_comments(shortcode, cookies_path, max_comments=75)
         if comments_text:
             result["comments"] = comments_text
 
-    # 3. Audio & Video frames OCR
+    # 4. Audio & Video frames OCR
     with tempfile.TemporaryDirectory() as tmpdir:
         cmd_dl = ["gallery-dl", "--dest", tmpdir]
         if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 100:
@@ -462,7 +478,6 @@ def scrape_instagram(url):
         except Exception:
             pass
 
-    # Check for GitHub and IMDb links
     combined_text = f"{result['caption']} {result['comments']} {result['spokenTranscript']} {result['onScreenText']}"
     gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
     if gh_match:
@@ -471,7 +486,6 @@ def scrape_instagram(url):
         search_target = result["caption"] or result["onScreenText"] or result["title"]
         result["githubUrl"] = search_github_repo(search_target)
 
-    # Search IMDb from normalized Caption first, then Comments
     result["imdbUrl"] = find_imdb_in_text(result["caption"], result["comments"])
 
     return result
@@ -541,7 +555,6 @@ def scrape_webpage(url):
         if main_text:
             result["onScreenText"] = main_text[:2500]
 
-        # Check for GitHub link
         if "github.com" in url:
             result["githubUrl"] = url
         else:
