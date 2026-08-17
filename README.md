@@ -30,7 +30,7 @@ An automated **n8n + Docker** multi-agent pipeline that monitors a Discord intak
 ├── scrape_instagram.py                    # Audio transcription, OCR, and metadata extraction engine
 ├── config.json                            # gallery-dl Instagram session configuration
 ├── cookies.txt                            # Netscape-formatted Instagram cookies (for auth bypass)
-├── Discord AI Router + Recipe Agent.json  # Complete n8n workflow export
+├── Discord AI Multi-Agent Router.json  # Complete n8n workflow export
 ├── discord-bot/                           # Node.js Discord gateway bot
 │   ├── bot.js
 │   ├── package.json
@@ -133,10 +133,10 @@ docker compose ps
    * **OpenRouter account:** Add your OpenRouter API Key.
    * **Discord Bot account:** Add your Discord Bot Token.
 3. Import the workflow file:
-   * In n8n, click **Workflows $\rightarrow$ Import from File**, and select `Discord AI Router + Recipe Agent.json`.
+   * In n8n, click **Workflows $\rightarrow$ Import from File**, and select `Discord AI Multi-Agent Router.json`.
    * *(Alternatively, via CLI)*:
      ```bash
-     docker cp "Discord AI Router + Recipe Agent.json" discord-n8n-n8n-1:/tmp/workflow.json
+     docker cp "Discord AI Multi-Agent Router.json" discord-n8n-n8n-1:/tmp/workflow.json
      docker exec -u node discord-n8n-n8n-1 n8n import:workflow --input=/tmp/workflow.json
      ```
 4. Update the **Discord Channel IDs** in each output node (`Create Recipe Post`, `Create Project Post`, `Create Workout Post`, `Create Media Post`) to match your server's channels.
