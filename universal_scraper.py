@@ -42,13 +42,37 @@ def transcribe_audio_file(audio_path):
         pass
     return ""
 
-def shortcode_to_media_id(shortcode):
-    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
-    media_id = 0
-    for letter in shortcode:
-        if letter in alphabet:
-            media_id = (media_id * 64) + alphabet.index(letter)
-    return media_id
+def search_github_repo(query):
+    if not query or len(query.strip()) < 3:
+        return ""
+    query = query.strip()
+    
+    # 1. Direct GitHub API search
+    try:
+        api_url = f"https://api.github.com/search/repositories?q={urllib.parse.quote(query)}&sort=stars&order=desc&per_page=3"
+        req = urllib.request.Request(api_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("items", [])
+            if items:
+                return items[0].get("html_url")
+    except Exception:
+        pass
+
+    # 2. DuckDuckGo lite search fallback
+    try:
+        post_data = urllib.parse.urlencode({"q": f"{query} site:github.com"}).encode("utf-8")
+        req = urllib.request.Request("https://lite.duckduckgo.com/lite/", data=post_data, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            content = resp.read().decode("utf-8", errors="ignore")
+            matches = re.findall(r'(https://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+)', content)
+            for m in matches:
+                if not any(bad in m for bad in ["/features", "/pricing", "/about", "/collections", "/trending", "/topics"]):
+                    return m
+    except Exception:
+        pass
+
+    return ""
 
 def extract_instagram_comments(shortcode, cookies_path, max_comments=100):
     """Extract full paginated comments (up to 100) from Instagram post using GraphQL."""
@@ -136,6 +160,7 @@ def scrape_youtube(url):
         "spokenTranscript": "",
         "onScreenText": "",
         "comments": "",
+        "githubUrl": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
@@ -237,6 +262,14 @@ def scrape_youtube(url):
             except Exception:
                 pass
 
+    # Check for GitHub link
+    combined_text = f"{result['title']} {result['caption']} {result['spokenTranscript']}"
+    gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
+    if gh_match:
+        result["githubUrl"] = gh_match.group(0)
+    elif result["title"] and any(k in combined_text.lower() for k in ["github", "tool", "project", "open source", "library", "code", "ai"]):
+        result["githubUrl"] = search_github_repo(result["title"])
+
     return result
 
 def scrape_instagram(url):
@@ -250,6 +283,7 @@ def scrape_instagram(url):
         "spokenTranscript": "",
         "onScreenText": "",
         "comments": "",
+        "githubUrl": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
@@ -340,6 +374,18 @@ def scrape_instagram(url):
         except Exception:
             pass
 
+    # Check for GitHub link
+    combined_text = f"{result['caption']} {result['comments']} {result['spokenTranscript']} {result['onScreenText']}"
+    gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
+    if gh_match:
+        result["githubUrl"] = gh_match.group(0)
+    elif any(k in combined_text.lower() for k in ["github", "repo", "open source", "developer tool", "code repository", "library"]):
+        # Extract probable tool name from first sentence or caption
+        first_line = result["caption"].split("\n")[0] if result["caption"] else ""
+        first_clean = re.sub(r'[#@\(\)]', '', first_line).strip()
+        if len(first_clean) > 5:
+            result["githubUrl"] = search_github_repo(first_clean)
+
     return result
 
 def scrape_webpage(url):
@@ -349,6 +395,7 @@ def scrape_webpage(url):
         "spokenTranscript": "",
         "onScreenText": "",
         "comments": "",
+        "githubUrl": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
@@ -404,6 +451,16 @@ def scrape_webpage(url):
         main_text = "\n".join(paragraphs[:15])
         if main_text:
             result["onScreenText"] = main_text[:2500]
+
+        # Check for GitHub link
+        if "github.com" in url:
+            result["githubUrl"] = url
+        else:
+            gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', raw_html)
+            if gh_match:
+                result["githubUrl"] = gh_match.group(0)
+            elif result["title"] and any(k in raw_html.lower() for k in ["github", "repository", "open-source", "npm", "pip"]):
+                result["githubUrl"] = search_github_repo(result["title"])
             
     except Exception as e:
         result["error"] = str(e)
