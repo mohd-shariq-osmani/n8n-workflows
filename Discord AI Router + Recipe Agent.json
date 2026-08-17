@@ -809,8 +809,8 @@
       "name": "LM Studio Chat Model",
       "credentials": {
         "openAiApi": {
-          "id": "LMStudioOpenAi1",
-          "name": "LM Studio account"
+          "id": "OZb3JE3aQLo1Noiq",
+          "name": "OpenAI account"
         }
       }
     }
