@@ -42,7 +42,8 @@
           "id": "Zr8t8Yruimx7lO52",
           "name": "Discord Bot account"
         }
-      }
+      },
+      "disabled": true
     },
     {
       "parameters": {
@@ -56,7 +57,8 @@
         560,
         2032
       ],
-      "alwaysOutputData": false
+      "alwaysOutputData": false,
+      "disabled": true
     },
     {
       "parameters": {
@@ -146,7 +148,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nDiscovered GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
+        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nVerified GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nVerified IMDb Link:\n{{ $json.imdbUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
         "messages": {
           "messageValues": [
             {
@@ -194,7 +196,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nDiscovered GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
+        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nVerified GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nVerified IMDb Link:\n{{ $json.imdbUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
         "messages": {
           "messageValues": [
             {
@@ -281,7 +283,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nDiscovered GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
+        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nVerified GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nVerified IMDb Link:\n{{ $json.imdbUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
         "messages": {
           "messageValues": [
             {
@@ -368,11 +370,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nDiscovered GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
+        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nVerified GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nVerified IMDb Link:\n{{ $json.imdbUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
         "messages": {
           "messageValues": [
             {
-              "message": "You are WatchlistGPT. Create a compact, prominent Discord recommendation card for Movies, TV Series, and Films.\n\nRules:\n- Title must be prominent H1 format: `# \ud83c\udfac [Movie / TV Show Title] ([Year])`.\n- Keep synopsis to 1-2 spoiler-free sentences.\n- List 2-3 key highlights or review takeaways.\n- ALWAYS include a direct IMDb search/title link: `https://www.imdb.com/find/?q=[Title_URL_Encoded]`.\n\nOutput Format:\n# \ud83c\udfac [Movie / TV Show Title] ([Year])\n> \ud83c\udfad **Type:** [Movie / Series] \u2022 **Genres:** [Genres]\n\n### \ud83d\udcd6 Synopsis\n[1-2 spoiler-free sentences]\n\n### \u2b50 Key Highlights\n\u2022 [Highlight 1]\n\u2022 [Highlight 2]\n\n\ud83c\udfac **IMDb:** https://www.imdb.com/find/?q=[Title_URL_Encoded]\n\ud83d\udcfa **Where to Watch:** [Streaming Platform if known]\n\ud83d\udd17 **Source:** [Source Link]"
+              "message": "You are WatchlistGPT. Create a compact, prominent Discord recommendation card for Movies, TV Series, and Films.\n\nRules:\n- Title must be prominent H1 format: `# \ud83c\udfac [Movie / TV Show Title] ([Year])`.\n- Keep synopsis to 1-2 spoiler-free sentences.\n- List 2-3 key highlights or review takeaways.\n- For IMDb, ALWAYS use the exact title URL (e.g. `https://www.imdb.com/title/tt.../`) from 'Verified IMDb Link' or format `https://www.imdb.com/find/?q=[Title_URL_Encoded]`.\n\nOutput Format:\n# \ud83c\udfac [Movie / TV Show Title] ([Year])\n> \ud83c\udfad **Type:** [Movie / Series] \u2022 **Genres:** [Genres]\n\n### \ud83d\udcd6 Synopsis\n[1-2 spoiler-free sentences]\n\n### \u2b50 Key Highlights\n\u2022 [Highlight 1]\n\u2022 [Highlight 2]\n\n\ud83c\udfac **IMDb:** [Exact IMDb Link or https://www.imdb.com/find/?q=Title_Name]\n\ud83d\udcfa **Where to Watch:** [Streaming Platform if known]\n\ud83d\udd17 **Source:** [Source Link]"
             }
           ]
         },
@@ -631,7 +633,8 @@
       "position": [
         112,
         2032
-      ]
+      ],
+      "disabled": true
     },
     {
       "parameters": {
@@ -704,7 +707,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return $input.all().map(item => {\n  const json = item.json;\n  const stdout = json.stdout || \"\";\n  let title = \"\";\n  let caption = \"\";\n  let spokenTranscript = \"\";\n  let onScreenText = \"\";\n  let comments = \"\";\n  let githubUrl = \"\";\n  let videoUrl = \"\";\n  let imageUrl = \"\";\n  let author = \"\";\n  let likes = 0;\n  let tags = [];\n  let sourceType = \"\";\n  let parsedData = null;\n\n  if (stdout.trim()) {\n    try {\n      const data = JSON.parse(stdout);\n      parsedData = data;\n      title = data.title || \"\";\n      caption = data.caption || \"\";\n      spokenTranscript = data.spokenTranscript || \"\";\n      onScreenText = data.onScreenText || \"\";\n      comments = data.comments || \"\";\n      githubUrl = data.githubUrl || \"\";\n      videoUrl = data.videoUrl || \"\";\n      imageUrl = data.imageUrl || \"\";\n      author = data.author || \"\";\n      likes = data.likes || 0;\n      tags = data.tags || [];\n      sourceType = data.sourceType || \"\";\n    } catch (e) {}\n  }\n\n  return {\n    json: {\n      ...json,\n      scrapedTitle: title,\n      caption: caption || \"\",\n      spokenTranscript: spokenTranscript || \"\",\n      onScreenText: onScreenText || \"\",\n      comments: comments || \"\",\n      githubUrl: githubUrl || \"\",\n      videoUrl: videoUrl || (json.urls && json.urls[0]) || \"\",\n      imageUrl: imageUrl || \"\",\n      author: author || \"\",\n      likes: likes,\n      tags: tags,\n      sourceType: sourceType,\n      rawMetadata: parsedData,\n      stdout: stdout\n    }\n  };\n});"
+        "jsCode": "return $input.all().map(item => {\n  const json = item.json;\n  const stdout = json.stdout || \"\";\n  let title = \"\";\n  let caption = \"\";\n  let spokenTranscript = \"\";\n  let onScreenText = \"\";\n  let comments = \"\";\n  let githubUrl = \"\";\n  let imdbUrl = \"\";\n  let videoUrl = \"\";\n  let imageUrl = \"\";\n  let author = \"\";\n  let likes = 0;\n  let tags = [];\n  let sourceType = \"\";\n  let parsedData = null;\n\n  if (stdout.trim()) {\n    try {\n      const data = JSON.parse(stdout);\n      parsedData = data;\n      title = data.title || \"\";\n      caption = data.caption || \"\";\n      spokenTranscript = data.spokenTranscript || \"\";\n      onScreenText = data.onScreenText || \"\";\n      comments = data.comments || \"\";\n      githubUrl = data.githubUrl || \"\";\n      imdbUrl = data.imdbUrl || \"\";\n      videoUrl = data.videoUrl || \"\";\n      imageUrl = data.imageUrl || \"\";\n      author = data.author || \"\";\n      likes = data.likes || 0;\n      tags = data.tags || [];\n      sourceType = data.sourceType || \"\";\n    } catch (e) {}\n  }\n\n  return {\n    json: {\n      ...json,\n      scrapedTitle: title,\n      caption: caption || \"\",\n      spokenTranscript: spokenTranscript || \"\",\n      onScreenText: onScreenText || \"\",\n      comments: comments || \"\",\n      githubUrl: githubUrl || \"\",\n      imdbUrl: imdbUrl || \"\",\n      videoUrl: videoUrl || (json.urls && json.urls[0]) || \"\",\n      imageUrl: imageUrl || \"\",\n      author: author || \"\",\n      likes: likes,\n      tags: tags,\n      sourceType: sourceType,\n      rawMetadata: parsedData,\n      stdout: stdout\n    }\n  };\n});"
       },
       "id": "e8529f7d-718b-413d-bc2c-f6529f7d67dd",
       "name": "Parse Instagram (gallery-dl)",
@@ -718,7 +721,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nDiscovered GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
+        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nVerified GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nVerified IMDb Link:\n{{ $json.imdbUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
         "messages": {
           "messageValues": [
             {
@@ -849,11 +852,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nDiscovered GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
+        "text": "=Discord Message:\n{{ $json.content || \"\" }}\n\nLinked Title / Topic:\n{{ $json.scrapedTitle || \"\" }}\n\nDescription / Caption:\n{{ $json.caption || \"\" }}\n\nComments Section:\n{{ $json.comments || \"\" }}\n\nSpoken Video Transcript:\n{{ $json.spokenTranscript || \"\" }}\n\nPage Text:\n{{ $json.onScreenText || \"\" }}\n\nVerified GitHub Repo:\n{{ $json.githubUrl || \"\" }}\n\nVerified IMDb Link:\n{{ $json.imdbUrl || \"\" }}\n\nSource Link:\n{{ $json.videoUrl || ($json.urls && $json.urls[0]) || \"\" }}",
         "messages": {
           "messageValues": [
             {
-              "message": "You are AnimeGPT. Create a compact, prominent Discord card for Anime, Manga, Manhwa, Manhua, and Webtoons.\n\nRules:\n- Title must be prominent H1 format: `# \ud83c\udf8c [Title / Spotlight Name]`.\n- Keep overview to 1-2 concise sentences.\n- List all featured / recommended titles from caption and comments.\n- ALWAYS include a direct IMDb search/title link: `https://www.imdb.com/find/?q=[Title_URL_Encoded]`.\n\nOutput Format:\n# \ud83c\udf8c [Title / Spotlight Name]\n> \ud83c\udff7\ufe0f **Type:** [Manhwa / Manhua / Manga / Anime] \u2022 **Genres:** [Genres]\n\n### \ud83d\udcd6 Overview\n[1-2 punchy sentences summarizing the story or recommendation list]\n\n### \u2b50 Recommended Titles\n\u2022 **[Title 1]**: [Short note / format]\n\u2022 **[Title 2]**: [Short note / format]\n\u2022 **[Title 3]**: [Short note / format]\n\n\ud83c\udfac **IMDb:** https://www.imdb.com/find/?q=[Title_URL_Encoded]\n\ud83d\udd17 **Source:** [Source Link]"
+              "message": "You are AnimeGPT. Create a compact, prominent Discord card for Anime, Manga, Manhwa, Manhua, and Webtoons.\n\nRules:\n- Title must be prominent H1 format: `# \ud83c\udf8c [Title / Spotlight Name]`.\n- Keep overview to 1-2 concise sentences.\n- List all featured / recommended titles from caption and comments.\n- For IMDb, ALWAYS use the exact title URL (e.g. `https://www.imdb.com/title/tt.../`) from 'Verified IMDb Link' or format `https://www.imdb.com/find/?q=[Title_URL_Encoded]`.\n\nOutput Format:\n# \ud83c\udf8c [Title / Spotlight Name]\n> \ud83c\udff7\ufe0f **Type:** [Manhwa / Manhua / Manga / Anime] \u2022 **Genres:** [Genres]\n\n### \ud83d\udcd6 Overview\n[1-2 punchy sentences summarizing the story or recommendation list]\n\n### \u2b50 Recommended Titles\n\u2022 **[Title 1]**: [Short note / format]\n\u2022 **[Title 2]**: [Short note / format]\n\u2022 **[Title 3]**: [Short note / format]\n\n\ud83c\udfac **IMDb:** [Exact IMDb Link or https://www.imdb.com/find/?q=Title_Name]\n\ud83d\udd17 **Source:** [Source Link]"
             }
           ]
         },

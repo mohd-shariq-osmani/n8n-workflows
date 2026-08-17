@@ -42,6 +42,27 @@ def transcribe_audio_file(audio_path):
         pass
     return ""
 
+def get_exact_imdb_url(query):
+    if not query or len(query.strip()) < 2:
+        return ""
+    try:
+        clean = ''.join(c.lower() for c in query if c.isalnum() or c.isspace()).strip()
+        clean = clean.replace(' ', '_')
+        if not clean:
+            return ""
+        url = f"https://v3.sg.media-imdb.com/suggestion/x/{urllib.parse.quote(clean)}.json"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("d", [])
+            for item in items:
+                item_id = item.get("id")
+                if item_id and item_id.startswith("tt"):
+                    return f"https://www.imdb.com/title/{item_id}/"
+    except Exception:
+        pass
+    return ""
+
 def search_github_repo(query):
     if not query or len(query.strip()) < 3:
         return ""
@@ -161,6 +182,7 @@ def scrape_youtube(url):
         "onScreenText": "",
         "comments": "",
         "githubUrl": "",
+        "imdbUrl": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
@@ -262,13 +284,17 @@ def scrape_youtube(url):
             except Exception:
                 pass
 
-    # Check for GitHub link
+    # Check for GitHub and IMDb links
     combined_text = f"{result['title']} {result['caption']} {result['spokenTranscript']}"
     gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
     if gh_match:
         result["githubUrl"] = gh_match.group(0)
     elif result["title"] and any(k in combined_text.lower() for k in ["github", "tool", "project", "open source", "library", "code", "ai"]):
         result["githubUrl"] = search_github_repo(result["title"])
+
+    # Resolve exact IMDb URL
+    if result["title"]:
+        result["imdbUrl"] = get_exact_imdb_url(result["title"])
 
     return result
 
@@ -284,6 +310,7 @@ def scrape_instagram(url):
         "onScreenText": "",
         "comments": "",
         "githubUrl": "",
+        "imdbUrl": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
@@ -374,17 +401,22 @@ def scrape_instagram(url):
         except Exception:
             pass
 
-    # Check for GitHub link
+    # Check for GitHub and IMDb links
     combined_text = f"{result['caption']} {result['comments']} {result['spokenTranscript']} {result['onScreenText']}"
     gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
     if gh_match:
         result["githubUrl"] = gh_match.group(0)
     elif any(k in combined_text.lower() for k in ["github", "repo", "open source", "developer tool", "code repository", "library"]):
-        # Extract probable tool name from first sentence or caption
         first_line = result["caption"].split("\n")[0] if result["caption"] else ""
         first_clean = re.sub(r'[#@\(\)]', '', first_line).strip()
         if len(first_clean) > 5:
             result["githubUrl"] = search_github_repo(first_clean)
+
+    # Search IMDb for first title
+    first_line = result["caption"].split("\n")[0] if result["caption"] else ""
+    first_clean = re.sub(r'[#@\(\)]', '', first_line).strip()
+    if first_clean and len(first_clean) > 2:
+        result["imdbUrl"] = get_exact_imdb_url(first_clean)
 
     return result
 
@@ -396,6 +428,7 @@ def scrape_webpage(url):
         "onScreenText": "",
         "comments": "",
         "githubUrl": "",
+        "imdbUrl": "",
         "videoUrl": url,
         "imageUrl": "",
         "author": "",
@@ -461,6 +494,9 @@ def scrape_webpage(url):
                 result["githubUrl"] = gh_match.group(0)
             elif result["title"] and any(k in raw_html.lower() for k in ["github", "repository", "open-source", "npm", "pip"]):
                 result["githubUrl"] = search_github_repo(result["title"])
+
+        if result["title"]:
+            result["imdbUrl"] = get_exact_imdb_url(result["title"])
             
     except Exception as e:
         result["error"] = str(e)
