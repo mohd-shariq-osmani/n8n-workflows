@@ -54,7 +54,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item=$json;const urls=(item.content.match(/https?:\\/\\/\\S+/g)||[]);return [{json:{...item,urls}}];"
+        "jsCode": "const item = $json;\nconst content = item.content || '';\nconst rawUrls = content.match(/https?:\\/\\/\\S+/g) || [];\nconst urls = rawUrls.map(u => u.replace(/[)>.,;!?]+$/, ''));\nconst igMatch = content.match(/https?:\\/\\/(?:www\\.)?instagram\\.com\\/\\S+/i);\nlet instagramUrl = urls.find(u => u.includes('instagram.com')) || (igMatch ? igMatch[0].replace(/[)>.,;!?]+$/, '') : '');\n\nreturn [{ json: { ...item, urls, instagramUrl } }];"
       },
       "id": "18e3b263-4e8f-4961-82c3-d8afef130380",
       "name": "Extract URLs",
@@ -108,7 +108,7 @@
           "cachedResultName": "recipe",
           "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1527849679683850250"
         },
-        "content": "={{ $json.title }}: \n{{ $json.markdown }}",
+        "content": "={{ $json.finalContent || $json.markdown }}",
         "options": {},
         "embeds": {
           "values": []
@@ -153,11 +153,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Recipe Input:\n\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n{{ $('HTTP Request - Instagram1').item ? $('HTTP Request - Instagram1').item.json.caption : '' }}\n",
+        "text": "=Recipe Input:\n\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.caption ? '\\nInstagram Caption:\\n' + $('Parse Instagram (gallery-dl)').item.json.caption : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.spokenTranscript ? '\\nSpoken Video Dialogue (Transcribed from Reel Audio):\\n' + $('Parse Instagram (gallery-dl)').item.json.spokenTranscript : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.onScreenText ? '\\nOn-Screen Video Text:\\n' + $('Parse Instagram (gallery-dl)').item.json.onScreenText : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.videoUrl ? '\\nInstagram Video URL:\\n' + $('Parse Instagram (gallery-dl)').item.json.videoUrl : '' }}\n",
         "messages": {
           "messageValues": [
             {
-              "message": "=You are RecipeGPT, an expert chef and nutritionist.\n\nConvert any recipe-related input into a complete, well-formatted Discord recipe.\n\nThe input may be:\n- Recipe URL\n- Reddit recipe\n- YouTube cooking video\n- Instagram recipe\n- TikTok recipe\n- Food image\n- Screenshot\n- Plain text recipe\n\nInfer missing information when appropriate.\n\nReturn ONLY Discord markdown.\n\nNever ask for more information.\nNever explain your reasoning."
+              "message": "You are RecipeGPT. Create a concise, clean Discord recipe card.\n\nRules:\n- Be brief and direct. NO conversational filler (e.g. \"Here is the recipe:\", \"Hope you enjoy!\").\n- Extract only ingredients and essential steps.\n- Return ONLY clean Discord markdown.\n\nFormat:\n**\ud83c\udf73 [Recipe Name]** \u2022 *[Prep/Cook Time if known]*\n\n**\ud83d\uded2 Ingredients:**\n\u2022 [Ingredient 1]\n\u2022 [Ingredient 2]\n\n**\ud83d\udc68\u200d\ud83c\udf73 Steps:**\n1. [Concise step 1]\n2. [Concise step 2]\n3. [Concise step 3]\n\n**\ud83d\udd17 Source:** [Link if available]"
             }
           ]
         },
@@ -194,7 +194,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const markdown = $json.markdown || \"\";\n\nreturn [\n  {\n    json: {\n      ...$json,\n      markdown: markdown.slice(0, 1990)\n    }\n  }\n];"
+        "jsCode": "let title = $json.title || \"\";\nlet markdown = $json.markdown || $json.text || $json.response || $json.output || \"\";\n\nmarkdown = markdown.trim();\n\n// Avoid duplicate title if markdown already contains it\nif (markdown.startsWith(\"# \") || markdown.startsWith(\"**\" + title + \"**\") || markdown.startsWith(\"## \")) {\n  // Title already in markdown\n} else if (title && !markdown.toLowerCase().includes(title.toLowerCase())) {\n  markdown = `**${title}**\\n\\n${markdown}`;\n}\n\n// Fallback if empty\nif (!markdown || markdown.length < 5) {\n  markdown = \"**Update:** Details received, but no detailed summary could be extracted.\";\n}\n\n// Strictly enforce Discord 2000 char limit (bound to 1850 max)\nif (markdown.length > 1850) {\n  markdown = markdown.slice(0, 1840) + \"\\n\\n*(content truncated)*\";\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      title: title,\n      markdown: markdown,\n      finalContent: markdown\n    }\n  }\n];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -207,7 +207,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const text = $json.text || \"\";\nlet agent = \"ignore\";\ntry {\n  const cleanText = text.replace(/```json/g, \"\").replace(/```/g, \"\").trim();\n  const parsed = JSON.parse(cleanText);\n  agent = parsed.agent || \"ignore\";\n} catch (e) {\n  if (text.includes(\"recipe\")) agent = \"recipe-direct\";\n  else if (text.includes(\"project\")) agent = \"project\";\n  else if (text.includes(\"workout\")) agent = \"workout\";\n  else if (text.includes(\"media\") || text.includes(\"watch\")) agent = \"media\";\n}\n\n// Refine recipe agent if it contains instagram\nif (agent === \"recipe\" || agent === \"recipe-direct\" || agent === \"recipe-instagram\") {\n  const content = $node[\"Extract URLs\"].json.content || \"\";\n  if (content.includes(\"instagram.com\")) {\n    agent = \"recipe-instagram\";\n  } else {\n    agent = \"recipe-direct\";\n  }\n}\nreturn [{ json: { agent } }];"
+        "jsCode": "const text = $json.text || \"\";\nlet agent = \"ignore\";\n\ntry {\n  const cleanText = text.replace(/```json/g, \"\").replace(/```/g, \"\").trim();\n  const parsed = JSON.parse(cleanText);\n  agent = (parsed.agent || \"ignore\").toLowerCase().trim();\n} catch (e) {\n  const lower = text.toLowerCase();\n  if (lower.includes(\"project\") || lower.includes(\"tech\") || lower.includes(\"code\") || lower.includes(\"software\") || lower.includes(\"automation\")) {\n    agent = \"project\";\n  } else if (lower.includes(\"recipe\") || lower.includes(\"food\") || lower.includes(\"cook\") || lower.includes(\"bake\")) {\n    agent = \"recipe\";\n  } else if (lower.includes(\"workout\") || lower.includes(\"fitness\") || lower.includes(\"gym\") || lower.includes(\"exercise\")) {\n    agent = \"workout\";\n  } else if (lower.includes(\"media\") || lower.includes(\"movie\") || lower.includes(\"film\") || lower.includes(\"watch\") || lower.includes(\"show\")) {\n    agent = \"media\";\n  }\n}\n\n// Normalize agent categories\nif (agent.includes(\"project\") || agent.includes(\"tech\") || agent.includes(\"code\")) {\n  agent = \"project\";\n} else if (agent.includes(\"recipe\") || agent.includes(\"food\") || agent.includes(\"cook\")) {\n  agent = \"recipe\";\n} else if (agent.includes(\"workout\") || agent.includes(\"fitness\") || agent.includes(\"gym\")) {\n  agent = \"workout\";\n} else if (agent.includes(\"media\") || agent.includes(\"movie\") || agent.includes(\"watch\")) {\n  agent = \"media\";\n} else {\n  agent = \"ignore\";\n}\n\nreturn [{ json: { agent } }];"
       },
       "id": "f15ab3c8-7553-4712-a936-4f4e0bee4333",
       "name": "Parse Router Output",
@@ -221,11 +221,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Project Input:\n\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n",
+        "text": "=Project Input:\n\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.caption ? '\\nInstagram Caption:\\n' + $('Parse Instagram (gallery-dl)').item.json.caption : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.spokenTranscript ? '\\nSpoken Video Dialogue (Transcribed from Reel Audio):\\n' + $('Parse Instagram (gallery-dl)').item.json.spokenTranscript : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.onScreenText ? '\\nOn-Screen Video Text:\\n' + $('Parse Instagram (gallery-dl)').item.json.onScreenText : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.videoUrl ? '\\nInstagram Video URL:\\n' + $('Parse Instagram (gallery-dl)').item.json.videoUrl : '' }}\n",
         "messages": {
           "messageValues": [
             {
-              "message": "=You are ProjectGPT, an expert software architect and technical writer.\n\nConvert the input project ideas, repositories, tools, or coding tutorials into a highly readable, structured Discord post.\n\nFormat the output nicely using Discord markdown including:\n- A bold Title at the top\n- Key Tech Stack / Languages\n- Brief Description / Objective\n- Notable Features or components\n- Links (GitHub, Website, etc.) if available\n- Notes / Ideas for implementation\n\nInfer details when appropriate, keeping technical terms accurate.\nReturn ONLY Discord markdown.\nNever ask for more information. Never explain your reasoning."
+              "message": "You are ProjectGPT. Create a concise, high-value Discord showcase for tech projects, AI tools, or code repos.\n\nRules:\n- Focus ONLY on key utility and essential details. NO conversational fluff.\n- Keep it under 200 words.\n- Return ONLY clean Discord markdown.\n\nFormat:\n**\ud83d\udcbb [Project / Tool Name]** \u2014 *[One-line summary]*\n\n**\ud83d\udccc Overview:**\n[2 concise sentences on what it is and its main capability]\n\n**\u26a1 Highlights:**\n\u2022 [Key feature / tech stack 1]\n\u2022 [Key feature / tech stack 2]\n\u2022 [Key feature / tech stack 3]\n\n**\ud83d\udd17 Link:** [GitHub/Website/Source Link if available]"
             }
           ]
         },
@@ -255,7 +255,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const markdown = $json.markdown || \"\";\n\nreturn [\n  {\n    json: {\n      ...$json,\n      markdown: markdown.slice(0, 1990)\n    }\n  }\n];"
+        "jsCode": "let title = $json.title || \"\";\nlet markdown = $json.markdown || $json.text || $json.response || $json.output || \"\";\n\nmarkdown = markdown.trim();\n\n// Avoid duplicate title if markdown already contains it\nif (markdown.startsWith(\"# \") || markdown.startsWith(\"**\" + title + \"**\") || markdown.startsWith(\"## \")) {\n  // Title already in markdown\n} else if (title && !markdown.toLowerCase().includes(title.toLowerCase())) {\n  markdown = `**${title}**\\n\\n${markdown}`;\n}\n\n// Fallback if empty\nif (!markdown || markdown.length < 5) {\n  markdown = \"**Update:** Details received, but no detailed summary could be extracted.\";\n}\n\n// Strictly enforce Discord 2000 char limit (bound to 1850 max)\nif (markdown.length > 1850) {\n  markdown = markdown.slice(0, 1840) + \"\\n\\n*(content truncated)*\";\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      title: title,\n      markdown: markdown,\n      finalContent: markdown\n    }\n  }\n];"
       },
       "id": "f4444de7-aa7d-4a86-bbfb-669b31000bb7",
       "name": "Limit Project Length",
@@ -283,7 +283,7 @@
           "cachedResultName": "projects",
           "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1527858846985486366"
         },
-        "content": "={{ $json.markdown }}",
+        "content": "={{ $json.finalContent || $json.markdown }}",
         "options": {},
         "embeds": {
           "values": []
@@ -308,11 +308,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Workout Input:\n\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n",
+        "text": "=Workout Input:\n\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.caption ? '\\nInstagram Caption:\\n' + $('Parse Instagram (gallery-dl)').item.json.caption : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.spokenTranscript ? '\\nSpoken Video Dialogue (Transcribed from Reel Audio):\\n' + $('Parse Instagram (gallery-dl)').item.json.spokenTranscript : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.onScreenText ? '\\nOn-Screen Video Text:\\n' + $('Parse Instagram (gallery-dl)').item.json.onScreenText : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.videoUrl ? '\\nInstagram Video URL:\\n' + $('Parse Instagram (gallery-dl)').item.json.videoUrl : '' }}\n",
         "messages": {
           "messageValues": [
             {
-              "message": "=You are FitnessGPT, an expert personal trainer and workout physiologist.\n\nConvert the input exercises, routines, gym splits, or workout plans into a clear, formatted Discord routine post.\n\nFormat the output nicely using Discord markdown including:\n- A bold Title (e.g. \"Leg Day\", \"Push Workout\")\n- Target Muscle Groups\n- Structured Exercise List: Exercise Name, Sets, Reps, and Target Intensity/RPE\n- Key Instructions/Form cues for each exercise\n- Rest periods & advice\n\nInfer details where appropriate, keeping physiology safe and practical.\nReturn ONLY Discord markdown.\nNever ask for more information. Never explain your reasoning."
+              "message": "You are FitnessGPT. Create a concise, actionable Discord workout card.\n\nRules:\n- Focus ONLY on exercises, sets, reps, and cues. NO conversational filler.\n- Keep it under 200 words.\n- Return ONLY clean Discord markdown.\n\nFormat:\n**\ud83c\udfcb\ufe0f [Routine Name / Split]** \u2022 *[Target Muscle Groups]*\n\n**\ud83d\udccb Exercises:**\n\u2022 **[Exercise 1]**: [Sets] x [Reps] \u2014 *[1 key form tip]*\n\u2022 **[Exercise 2]**: [Sets] x [Reps] \u2014 *[1 key form tip]*\n\u2022 **[Exercise 3]**: [Sets] x [Reps] \u2014 *[1 key form tip]*\n\n**\ud83d\udca1 Rest / Note:** [1 sentence on rest or tempo]"
             }
           ]
         },
@@ -342,7 +342,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const markdown = $json.markdown || \"\";\nreturn [\n  {\n    json: {\n      ...$json,\n      markdown: markdown.slice(0, 1990)\n    }\n  }\n];"
+        "jsCode": "let title = $json.title || \"\";\nlet markdown = $json.markdown || $json.text || $json.response || $json.output || \"\";\n\nmarkdown = markdown.trim();\n\n// Avoid duplicate title if markdown already contains it\nif (markdown.startsWith(\"# \") || markdown.startsWith(\"**\" + title + \"**\") || markdown.startsWith(\"## \")) {\n  // Title already in markdown\n} else if (title && !markdown.toLowerCase().includes(title.toLowerCase())) {\n  markdown = `**${title}**\\n\\n${markdown}`;\n}\n\n// Fallback if empty\nif (!markdown || markdown.length < 5) {\n  markdown = \"**Update:** Details received, but no detailed summary could be extracted.\";\n}\n\n// Strictly enforce Discord 2000 char limit (bound to 1850 max)\nif (markdown.length > 1850) {\n  markdown = markdown.slice(0, 1840) + \"\\n\\n*(content truncated)*\";\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      title: title,\n      markdown: markdown,\n      finalContent: markdown\n    }\n  }\n];"
       },
       "id": "2dba30ac-b6f0-431f-a824-c00ae65e8e37",
       "name": "Limit Workout Length",
@@ -370,7 +370,7 @@
           "cachedResultName": "workout",
           "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1527849679683850252"
         },
-        "content": "={{ $json.title }}: \n{{ $json.markdown }}",
+        "content": "={{ $json.finalContent || $json.markdown }}",
         "options": {},
         "embeds": {
           "values": []
@@ -395,11 +395,11 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Media Input:\n\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n",
+        "text": "=Media Input:\n\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.caption ? '\\nInstagram Caption:\\n' + $('Parse Instagram (gallery-dl)').item.json.caption : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.spokenTranscript ? '\\nSpoken Video Dialogue (Transcribed from Reel Audio):\\n' + $('Parse Instagram (gallery-dl)').item.json.spokenTranscript : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.onScreenText ? '\\nOn-Screen Video Text:\\n' + $('Parse Instagram (gallery-dl)').item.json.onScreenText : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.videoUrl ? '\\nInstagram Video URL:\\n' + $('Parse Instagram (gallery-dl)').item.json.videoUrl : '' }}\n",
         "messages": {
           "messageValues": [
             {
-              "message": "=You are WatchlistGPT, an expert film critic and media curator.\n\nConvert the input TV shows, movies, recommendations, reviews, or links (IMDb, Letterboxd, Netflix, etc.) into a beautifully formatted Discord recommendation post.\n\nFormat the output nicely using Discord markdown including:\n- A bold Title (Show/Movie Name) and Year\n- Type (Movie / TV Series / Miniseries)\n- Genres & Main Cast/Director if known\n- Synopsis / Summary\n- Where to Watch (if mentioned or obvious)\n- Why to Watch / Review highlights\n- Links (IMDb, Letterboxd, etc.)\n\nInfer details when appropriate, keeping summaries spoiler-free.\nReturn ONLY Discord markdown.\nNever ask for more information. Never explain your reasoning."
+              "message": "You are WatchlistGPT. Create a concise, spoiler-free Discord recommendation card.\n\nRules:\n- Focus ONLY on essential review info. NO conversational filler.\n- Keep it under 200 words.\n- Return ONLY clean Discord markdown.\n\nFormat:\n**\ud83c\udfac [Title] ([Year])** \u2022 *[Movie/Series] \u2022 [Genres]*\n\n**\ud83d\udcd6 Synopsis:**\n[2 concise sentences summary, spoiler-free]\n\n**\u2b50 Standout:**\n\u2022 [1 key reason to watch or rating]\n\u2022 [Cast/Director or tone]\n\n**\ud83d\udcfa Where to Watch:** [Platform / Streaming info if mentioned]"
             }
           ]
         },
@@ -429,7 +429,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const markdown = $json.markdown || \"\";\nreturn [\n  {\n    json: {\n      ...$json,\n      markdown: markdown.slice(0, 1990)\n    }\n  }\n];"
+        "jsCode": "let title = $json.title || \"\";\nlet markdown = $json.markdown || $json.text || $json.response || $json.output || \"\";\n\nmarkdown = markdown.trim();\n\n// Avoid duplicate title if markdown already contains it\nif (markdown.startsWith(\"# \") || markdown.startsWith(\"**\" + title + \"**\") || markdown.startsWith(\"## \")) {\n  // Title already in markdown\n} else if (title && !markdown.toLowerCase().includes(title.toLowerCase())) {\n  markdown = `**${title}**\\n\\n${markdown}`;\n}\n\n// Fallback if empty\nif (!markdown || markdown.length < 5) {\n  markdown = \"**Update:** Details received, but no detailed summary could be extracted.\";\n}\n\n// Strictly enforce Discord 2000 char limit (bound to 1850 max)\nif (markdown.length > 1850) {\n  markdown = markdown.slice(0, 1840) + \"\\n\\n*(content truncated)*\";\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      title: title,\n      markdown: markdown,\n      finalContent: markdown\n    }\n  }\n];"
       },
       "id": "83570df2-71b6-4a66-856a-461806d6228a",
       "name": "Limit Media Length",
@@ -457,7 +457,7 @@
           "cachedResultName": "movies-tv",
           "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1527849679683850253"
         },
-        "content": "={{ $json.title }}: \n{{ $json.markdown }}",
+        "content": "={{ $json.finalContent || $json.markdown }}",
         "options": {},
         "embeds": {
           "values": []
@@ -495,7 +495,7 @@
                   {
                     "id": "3708f4d1-cdd3-426a-9b83-d688745df32d",
                     "leftValue": "={{ $json.agent }}",
-                    "rightValue": "instagram",
+                    "rightValue": "recipe",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -505,7 +505,7 @@
                 "combinator": "and"
               },
               "renameOutput": true,
-              "outputKey": "Instagram"
+              "outputKey": "Recipe"
             },
             {
               "conditions": {
@@ -649,38 +649,8 @@
     },
     {
       "parameters": {
-        "url": "https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer YOUR_APIFY_API_TOKEN"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"directUrls\": [\n    \"{{ $('Extract URLs').item.json.content }}\"\n  ],\n  \"resultsType\": \"posts\",\n  \"resultsLimit\": 1\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        1456,
-        1888
-      ],
-      "id": "edd38507-9462-4fae-a0bf-991855dfd559",
-      "name": "HTTP Request - Instagram1"
-    },
-    {
-      "parameters": {
         "promptType": "define",
-        "text": "=You are an AI routing agent.\n\nYour job is to determine whether this Discord message should be handled by one of our specialty agents: Recipe, Project, Workout, or Media.\n\nClassify the message into one of these categories:\n1. \"recipe-instagram\": An Instagram post/reel containing a recipe.\n2. \"recipe-direct\": Any other recipe or cooking related content (e.g. recipe webpage URL, Reddit recipe, YouTube cooking video, TikTok recipe, cooking instructions, ingredients, screenshot/image of a recipe).\n3. \"project\": Software development projects, coding tutorials, GitHub repositories, programming questions, software tools, or project ideas.\n4. \"workout\": Workout exercises, gym routines, fitness plans, training instructions, exercises, sets/reps, or workout logs.\n5. \"media\": TV shows or movies to watch, movie/show recommendations, reviews, trailers, IMDb/Letterboxd links, or watchlist suggestions.\n6. \"ignore\": Anything else that does not fit the above categories.\n\nMessage:\n{{$json.content}}\n\nEmbeds:\n{{JSON.stringify($json.embeds)}}\n\nAttachments:\n{{JSON.stringify($json.attachments)}}\n\nReturn ONLY valid JSON in this format:\n{\"agent\": \"category_name\"}\n\nDo not explain.\nDo not use markdown blocks.\nReturn only JSON.",
+        "text": "=You are an intelligent AI Content Router for a Discord community.\n\nYour task is to analyze the user's input (including any scraped Instagram caption and spoken video audio) and route it to the single most appropriate specialty agent.\n\nCategories:\n1. \"project\": Software development, programming tutorials, tech products, AI tools, browser automation, GitHub repositories, coding libraries, system architecture, tech showcases, and developer tools.\n2. \"recipe\": Cooking recipes, culinary instructions, ingredients list, meal prep, food preparation, baking, cocktails, or restaurant dish breakdowns.\n3. \"workout\": Fitness routines, gym exercises, bodybuilding splits, weightlifting sets/reps, stretching, mobility, or workout plans.\n4. \"media\": Movies, TV shows, anime, film reviews, watchlist recommendations, trailers, and streaming suggestions.\n5. \"ignore\": General chatter, memes, questions, or anything that doesn't fit the specialty agents above.\n\nInput Data:\nDiscord Message:\n{{$node[\"Extract URLs\"].json.content}}\n\nURLs:\n{{JSON.stringify($node[\"Extract URLs\"].json.urls)}}\n\nAttachments:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.attachments)}}\n\nEmbeds:\n{{JSON.stringify($node[\"Get Discord Messages\"].json.embeds)}}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.caption ? '\\nInstagram Caption:\\n' + $('Parse Instagram (gallery-dl)').item.json.caption : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.spokenTranscript ? '\\nSpoken Video Dialogue (Transcribed from Reel Audio):\\n' + $('Parse Instagram (gallery-dl)').item.json.spokenTranscript : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.onScreenText ? '\\nOn-Screen Video Text:\\n' + $('Parse Instagram (gallery-dl)').item.json.onScreenText : '' }}\n{{ $('Parse Instagram (gallery-dl)').item && $('Parse Instagram (gallery-dl)').item.json.videoUrl ? '\\nInstagram Video URL:\\n' + $('Parse Instagram (gallery-dl)').item.json.videoUrl : '' }}\n\nReturn ONLY valid JSON in this format:\n{\"agent\": \"category_name\"}\n\nDo not include markdown blocks or any other text.",
         "batching": {}
       },
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
@@ -691,6 +661,33 @@
       ],
       "id": "556d4ff2-af38-4438-a135-2f8669c1f19d",
       "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "command": "=python3 /usr/local/bin/scrape_instagram.py '{{ $json.instagramUrl || ($json.urls && $json.urls[0]) || \"\" }}'"
+      },
+      "id": "c18b7654-e05e-4c28-971a-28952a514d11",
+      "name": "Execute gallery-dl",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1380,
+        1888
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const stdout = $json.stdout || \"\";\nlet caption = \"\";\nlet spokenTranscript = \"\";\nlet onScreenText = \"\";\nlet videoUrl = \"\";\nlet imageUrl = \"\";\nlet author = \"\";\nlet likes = 0;\nlet comments = 0;\nlet parsedData = null;\n\nif (stdout.trim()) {\n  try {\n    const data = JSON.parse(stdout);\n    parsedData = data;\n    caption = data.caption || \"\";\n    spokenTranscript = data.spokenTranscript || \"\";\n    onScreenText = data.onScreenText || \"\";\n    videoUrl = data.videoUrl || \"\";\n    imageUrl = data.imageUrl || \"\";\n    author = data.author || \"\";\n    likes = data.likes || 0;\n    comments = data.comments || 0;\n  } catch (e) {\n    const match = stdout.match(/\"description\"\\s*:\\s*\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"/);\n    if (match) {\n      try { caption = JSON.parse(`\"${match[1]}\"`); } catch { caption = match[1]; }\n    }\n  }\n}\n\nconst extractNode = $(\"Extract URLs\").first()?.json || {};\n\nreturn [\n  {\n    json: {\n      ...extractNode,\n      caption: caption || \"\",\n      spokenTranscript: spokenTranscript || \"\",\n      onScreenText: onScreenText || \"\",\n      videoUrl: videoUrl || \"\",\n      imageUrl: imageUrl || \"\",\n      author: author || \"\",\n      likes: likes,\n      comments: comments,\n      rawMetadata: parsedData,\n      stdout: stdout\n    }\n  }\n];"
+      },
+      "id": "e8529f7d-718b-413d-bc2c-f6529f7d67dd",
+      "name": "Parse Instagram (gallery-dl)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        1888
+      ]
     }
   ],
   "pinData": {},
@@ -966,22 +963,11 @@
       "main": [
         [
           {
-            "node": "HTTP Request - Instagram1",
+            "node": "Execute gallery-dl",
             "type": "main",
             "index": 0
           }
         ],
-        [
-          {
-            "node": "Basic LLM Chain",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HTTP Request - Instagram1": {
-      "main": [
         [
           {
             "node": "Basic LLM Chain",
@@ -996,6 +982,28 @@
         [
           {
             "node": "Parse Router Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute gallery-dl": {
+      "main": [
+        [
+          {
+            "node": "Parse Instagram (gallery-dl)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Instagram (gallery-dl)": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
             "type": "main",
             "index": 0
           }

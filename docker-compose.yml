@@ -1,0 +1,45 @@
+services:
+  n8n:
+    build: .
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_PROTOCOL=https
+      - N8N_HOST=customize-crouton-mobility.ngrok-free.dev
+      - WEBHOOK_URL=https://customize-crouton-mobility.ngrok-free.dev/
+      - N8N_EDITOR_BASE_URL=https://customize-crouton-mobility.ngrok-free.dev/
+      - GENERIC_TIMEZONE=Asia/Kolkata
+      - NODES_EXCLUDE=[]
+      - N8N_ENABLE_UNSAFE_CORE_NODES=true
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - N8N_PROXY_HOPS=1
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./config.json:/home/node/.config/gallery-dl/config.json:ro
+      - ./cookies.txt:/home/node/.config/gallery-dl/cookies.txt:ro
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: always
+    command:
+      - "http"
+      - "n8n:5678"
+      - "--url=customize-crouton-mobility.ngrok-free.dev"
+    environment:
+      - NGROK_AUTHTOKEN=3F0NHo5EISVT6d2la3SFwdzRd6h_3LArJF4mBAaPqzJSY3iN1
+    depends_on:
+      - n8n
+
+  discord-bot:
+    build: ./discord-bot
+    restart: always
+    environment:
+      - DISCORD_BOT_TOKEN=K0PKiQltTILdVpNlaZ6F7N916IZg37BJ
+      - DISCORD_CHANNEL_ID=1527074193823498283
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/discord-intake
+    depends_on:
+      - n8n
+
+volumes:
+  n8n_data:

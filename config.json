@@ -1,0 +1,7 @@
+{
+  "extractor": {
+    "instagram": {
+      "cookies": "/home/node/.config/gallery-dl/cookies.txt"
+    }
+  }
+}

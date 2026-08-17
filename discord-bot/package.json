@@ -1,0 +1,13 @@
+{
+  "name": "discord-n8n-forwarder",
+  "version": "1.0.0",
+  "description": "Forwards Discord channel messages to an n8n webhook",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "axios": "^1.7.2"
+  }
+}
