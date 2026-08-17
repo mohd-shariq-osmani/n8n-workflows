@@ -1,23 +1,36 @@
 # 🤖 Discord AI Content Router & Multi-Agent Assistant
 
-An automated **n8n + Docker** multi-agent pipeline that monitors a Discord intake channel, classifies shared content (Instagram Reels, YouTube videos, GitHub repositories, workout plans, recipes, and movies), extracts multimedia data (including **full Instagram captions, video audio transcription, and on-screen OCR**), and posts clean, formatted summary cards to dedicated Discord channels.
+An automated **n8n + Docker** multi-agent pipeline that monitors a Discord intake channel, classifies incoming content across social media and the web (Instagram Reels, YouTube videos, GitHub repositories, Web articles, workouts, recipes, anime, and movies), extracts multimodal data (including **paginated Instagram comments, video audio transcription, and on-screen OCR**), and posts clean, formatted recommendation cards to dedicated Discord channels.
 
 ---
 
 ## 🌟 Key Features
 
-* **🧠 Intelligent AI Content Router:** Automatically classifies incoming Discord messages, links, and attachments into 4 specialized categories:
-  * **🍳 RecipeGPT:** Extracts ingredients, prep/cook time, and numbered steps $\rightarrow$ Posts to `#recipe`
-  * **💻 ProjectGPT:** Summarizes tech tools, GitHub repos, and coding tutorials $\rightarrow$ Posts to `#projects`
-  * **🏋️ FitnessGPT:** Organizes gym workouts, exercises, sets/reps, and form cues $\rightarrow$ Posts to `#workout`
-  * **🎬 WatchlistGPT:** Formats movie and TV show recommendations with spoiler-free synopses $\rightarrow$ Posts to `#movies-tv`
-* **📸 Complete Instagram Scraper & Transcriber:**
-  * **100% Free & Self-Hosted:** Replaces paid third-party APIs (like Apify) using `gallery-dl`, `yt-dlp`, and `ffmpeg`.
-  * **Caption & Metadata Extraction:** Pulls full post descriptions, creator tags, and engagement counts.
-  * **Spoken Audio Transcription:** Downloads the `.mp4` video stream, extracts the audio track with `ffmpeg`, and transcribes spoken creator dialogue into text for the LLM.
-  * **On-Screen Video OCR:** Analyzes keyframe frames using `Tesseract OCR` to extract on-screen code snippets, tool names, and text overlays.
-* **⚡ High-Signal, Concise Discord Cards:** Every agent outputs concise, scannable cards strictly bounded under Discord's 2,000-character limit.
-* **🌐 Integrated ngrok Tunnel:** Provides a fixed public webhook and editor URL for self-hosted n8n.
+### 🧠 6 Intelligent Specialty Agents
+* **🍳 ChefGPT (`#recipe`):** Ingredients, prep/cook times, and numbered step-by-step instructions.
+* **💻 CodeGPT (`#projects`):** Tech tools, open-source libraries, architecture breakdowns, and **verified GitHub repository links**.
+* **🏋️ FitGPT (`#workout`):** Target muscle groups, exercise splits, sets/reps, and form cues.
+* **🎌 AnimeGPT (`#anime-manhua`):** Japanese Anime, Korean Manhwa / Webtoons, Chinese Manhua / Donghua, Manga, and Light Novels with **exact canonical IMDb links**.
+* **🎬 WatchlistGPT (`#movie-tv`):** Live-action Movies, TV Series, and documentaries with spoiler-free synopses, streaming platforms, and **exact canonical IMDb links**.
+* **📌 OmniGPT (`#others`):** General articles, news, interesting tools, productivity workflows, and lifestyle content.
+
+---
+
+### 🌐 Universal Multimodal Scraping Engine (`universal_scraper.py`)
+* **100% Free & Self-Hosted:** Replaces paid scraping APIs using `gallery-dl`, `yt-dlp`, and `ffmpeg`.
+* **Multi-Page Instagram Comments (GraphQL):** Extracts up to 100+ comments with pinned/creator priority to capture titles and community recommendations.
+* **Audio Speech-to-Text Transcription:** Downloads `.mp4` audio streams and transcribes spoken creator dialogue into text for the LLM.
+* **On-Screen Keyframe OCR:** Extracts on-screen code snippets, tool names, and text overlays using `Tesseract OCR`.
+* **Verified GitHub Discovery:** Cleans creator engagement hooks (`"Comment WORKSTATION"`) and resolves the exact official repository via DOM search.
+* **Canonical IMDb Resolution:** Normalizes Unicode stylized fonts (`• 𝐓𝐢𝐭𝐥𝐞:` $\rightarrow$ `Title:`) and resolves canonical IMDb title IDs (`tt...`).
+
+---
+
+### ⚡ Automated Subflows & System Reliability
+* **🗞️ Daily 11:00 PM IST Digest:** Automated schedule trigger (`30 17 * * *` UTC) aggregating all curated items from the last 24 hours into a clickable recap posted in `#general`.
+* **🚨 Automated `#error-log` Alerts:** Dedicated `Error Trigger` node capturing workflow failures and routing formatted error reports to `#error-log`.
+* **📄 Multi-Message Paragraph Chunking:** Cleanly splits long content ($\ge 1,850$ characters) across sequential messages (`Part 1/2`, `Part 2/2`) without exceeding Discord's 2,000-character limit.
+* **🤖 Dual LLM Backend:** Seamlessly switch between **OpenRouter** cloud models (`gpt-4o-mini`, `gpt-oss-20b`, `claude-3.5-sonnet`) and **LM Studio** local models via OpenAI-compatible endpoints (`http://host.docker.internal:1234/v1`).
 
 ---
 
@@ -25,163 +38,130 @@ An automated **n8n + Docker** multi-agent pipeline that monitors a Discord intak
 
 ```text
 .
-├── Dockerfile                             # Multi-stage image: n8n + Python 3 + gallery-dl + ffmpeg + OCR
-├── docker-compose.yml                     # Container definitions for n8n, ngrok, and discord-bot
-├── scrape_instagram.py                    # Audio transcription, OCR, and metadata extraction engine
+├── Dockerfile                             # Multi-stage image: n8n + Python 3 + yt-dlp + gallery-dl + ffmpeg + Tesseract OCR
+├── docker-compose.yml                     # Container orchestration (n8n, ngrok, discord-bot)
+├── universal_scraper.py                   # Multimodal scraper (audio transcription, OCR, IMDb & GitHub resolver)
+├── generate_daily_digest.py               # Automated 24h Discord channel aggregation script
 ├── config.json                            # gallery-dl Instagram session configuration
 ├── cookies.txt                            # Netscape-formatted Instagram cookies (for auth bypass)
-├── Discord AI Multi-Agent Router.json  # Complete n8n workflow export
-├── discord-bot/                           # Node.js Discord gateway bot
+├── Discord AI Multi-Agent Router.json     # Complete export of all n8n workflow nodes and agent chains
+├── discord-bot/                           # Real-time Discord gateway listener bot
 │   ├── bot.js
 │   ├── package.json
 │   └── Dockerfile
-├── start-n8n-ngrok.command               # 1-click launch script for macOS
 └── README.md
 ```
 
 ---
 
-## 🚀 Quick Start & Installation
+## 🚀 Quick Start & Setup
 
 ### 1. Prerequisites
 * [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
 * An active Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications)).
 * A free [ngrok](https://ngrok.com/) account and authtoken.
-* An [OpenRouter](https://openrouter.ai/) API key for AI inference.
+* An [OpenRouter](https://openrouter.ai/) API key or local [LM Studio](https://lmstudio.ai/) server.
 
 ---
 
-### 2. Configure Environment Variables
+### 2. Configure Environment Variables (`.env`)
 
-Edit `docker-compose.yml` to set your credentials and channel IDs:
+Create a `.env` file in the root directory:
 
-```yaml
-services:
-  n8n:
-    build: .
-    restart: always
-    ports:
-      - "5678:5678"
-    environment:
-      - N8N_PROTOCOL=https
-      - N8N_HOST=your-ngrok-domain.ngrok-free.dev
-      - WEBHOOK_URL=https://your-ngrok-domain.ngrok-free.dev/
-      - N8N_EDITOR_BASE_URL=https://your-ngrok-domain.ngrok-free.dev/
-      - GENERIC_TIMEZONE=Asia/Kolkata
-      - NODES_EXCLUDE=[]
-      - N8N_ENABLE_UNSAFE_CORE_NODES=true
-      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
-      - N8N_PROXY_HOPS=1
-    volumes:
-      - n8n_data:/home/node/.n8n
-      - ./config.json:/home/node/.config/gallery-dl/config.json:ro
-      - ./cookies.txt:/home/node/.config/gallery-dl/cookies.txt:ro
+```bash
+# Discord Configuration
+DISCORD_BOT_TOKEN=your_discord_bot_token_here
+DISCORD_CHANNEL_ID=your_intake_channel_id_here
 
-  ngrok:
-    image: ngrok/ngrok:latest
-    restart: always
-    command:
-      - "http"
-      - "n8n:5678"
-      - "--url=your-ngrok-domain.ngrok-free.dev"
-    environment:
-      - NGROK_AUTHTOKEN=your_ngrok_token_here
-
-  discord-bot:
-    build: ./discord-bot
-    restart: always
-    environment:
-      - DISCORD_BOT_TOKEN=your_discord_bot_token_here
-      - DISCORD_CHANNEL_ID=your_intake_channel_id_here
-      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/discord-intake
+# ngrok Configuration
+NGROK_AUTHTOKEN=your_ngrok_token_here
 ```
 
 ---
 
-### 3. Add Instagram Cookies (Bypass Login Wall)
+### 3. Add Instagram Cookies (For Instagram Extraction)
 
-Instagram requires an authenticated session to access post data and video streams.
-
-1. Log into Instagram in your web browser (a secondary/burner account is recommended).
-2. Export your cookies in **Netscape format** using a browser extension like:
-   * **Chrome / Brave:** [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) or **Cookie-Editor**
-   * **Firefox:** Export Cookies
-3. Paste the exported cookie text into `cookies.txt` in the root of this folder.
+1. Log into Instagram in your web browser.
+2. Export your cookies in **Netscape format** using a browser extension (e.g. *Get cookies.txt LOCALLY* or *Cookie-Editor*).
+3. Paste the exported cookie text into `cookies.txt` in the root folder.
 
 ---
 
 ### 4. Build and Start the Containers
 
-Run the following command to build the custom n8n container and start all services:
-
 ```bash
 docker compose up -d --build
 ```
 
-To verify the status of running containers:
-
+Verify that all containers are healthy:
 ```bash
 docker compose ps
 ```
 
 ---
 
-### 5. Import and Activate the n8n Workflow
+### 5. Import and Activate the Workflow in n8n
 
 1. Open your n8n web editor at `https://your-ngrok-domain.ngrok-free.dev` (or `http://localhost:5678`).
-2. Go to **Credentials** and configure:
-   * **OpenRouter account:** Add your OpenRouter API Key.
-   * **Discord Bot account:** Add your Discord Bot Token.
-3. Import the workflow file:
-   * In n8n, click **Workflows $\rightarrow$ Import from File**, and select `Discord AI Multi-Agent Router.json`.
-   * *(Alternatively, via CLI)*:
+2. Go to **Credentials** and add:
+   * **OpenRouter account:** Your OpenRouter API Key (or local LM Studio credentials).
+   * **Discord Bot account:** Your Discord Bot Token.
+3. Import the workflow:
+   * Click **Workflows $\rightarrow$ Import from File**, and select `Discord AI Multi-Agent Router.json`.
+   * *(Or via CLI)*:
      ```bash
      docker cp "Discord AI Multi-Agent Router.json" discord-n8n-n8n-1:/tmp/workflow.json
      docker exec -u node discord-n8n-n8n-1 n8n import:workflow --input=/tmp/workflow.json
      ```
-4. Update the **Discord Channel IDs** in each output node (`Create Recipe Post`, `Create Project Post`, `Create Workout Post`, `Create Media Post`) to match your server's channels.
+4. Set your destination channel IDs in the Discord output nodes (`#recipe`, `#projects`, `#workout`, `#anime-manhua`, `#movie-tv`, `#others`, `#general`, `#error-log`).
 5. Toggle the workflow status to **Active** (Published).
 
 ---
 
-## 🛠️ Architecture & Workflow Diagram
+## 🛠️ Architecture Flow
 
 ```mermaid
 flowchart TD
-    A[Discord Intake Channel / Polling Trigger] --> B[Extract URLs & Message Data]
-    B --> C{Contains Instagram Link?}
-    C -- Yes --> D[scrape_instagram.py<br/>gallery-dl + ffmpeg + SpeechRecognition]
-    D --> E[Parse Instagram Metadata, Audio & OCR]
-    C -- No --> F[Basic LLM Chain: Content Router]
+    A[Discord Intake Message / Webhook] --> B[Extract URLs & Media]
+    B --> C{URL Type?}
+    C -- Social Video / Webpage --> D[universal_scraper.py<br/>yt-dlp + gallery-dl + ffmpeg + Tesseract OCR]
+    D --> E[Parsed Transcript, Comments, OCR, IMDb & GitHub URLs]
+    C -- Text / Direct Post --> F[AI Router Classification]
     E --> F
-    F --> G[Parse Router Output]
-    G --> H{Router Switch}
     
-    H -- recipe --> I[RecipeGPT Agent] --> M[#recipe Channel]
-    H -- project --> J[ProjectGPT Agent] --> N[#projects Channel]
-    H -- workout --> K[FitnessGPT Agent] --> O[#workout Channel]
-    H -- media --> L[WatchlistGPT Agent] --> P[#movies-tv Channel]
+    F --> G{Router Switch}
+    G -- recipe --> H1[ChefGPT Agent] --> P1[#recipe]
+    G -- project --> H2[CodeGPT Agent] --> P2[#projects]
+    G -- workout --> H3[FitGPT Agent] --> P3[#workout]
+    G -- anime --> H4[AnimeGPT Agent] --> P4[#anime-manhua]
+    G -- media --> H5[WatchlistGPT Agent] --> P5[#movie-tv]
+    G -- others --> H6[OmniGPT Agent] --> P6[#others]
+
+    subgraph Background Subflows
+        T1[Daily 11 PM IST Trigger] --> D1[generate_daily_digest.py] --> D2[Post Digest to #general]
+        E1[Error Trigger Node] --> E2[Format Error Alert] --> E3[Post to #error-log]
+    end
 ```
 
 ---
 
 ## 🔧 Useful Commands
 
-* **View live n8n logs:**
+* **View live n8n container logs:**
   ```bash
   docker logs -f discord-n8n-n8n-1
   ```
-* **Test Instagram Scraping & Audio Transcription directly:**
+* **Test universal scraper directly:**
   ```bash
-  docker exec -u node discord-n8n-n8n-1 python3 /usr/local/bin/scrape_instagram.py "https://www.instagram.com/reel/YOUR_REEL_ID/"
+  docker exec -u node discord-n8n-n8n-1 python3 /usr/local/bin/universal_scraper.py "https://www.instagram.com/reel/YOUR_REEL_ID/"
   ```
-* **Restart n8n container:**
+* **Test Daily Digest generator directly:**
+  ```bash
+  docker exec -u node discord-n8n-n8n-1 python3 /usr/local/bin/generate_daily_digest.py
+  ```
+* **Restart n8n service:**
   ```bash
   docker compose restart n8n
-  ```
-* **Stop all containers:**
-  ```bash
-  docker compose down
   ```
 
 ---
@@ -190,6 +170,14 @@ flowchart TD
 
 | Issue | Cause | Fix |
 | :--- | :--- | :--- |
-| `AbortExtraction: HTTP redirect to login page` | Missing or expired Instagram cookies. | Refresh and paste updated cookies into `cookies.txt`. |
-| `Invalid Form Body` on Discord post | Output message exceeded 2,000 characters. | Handled automatically by the built-in `finalContent` 1,850-character limiter. |
-| `Unrecognized node type: executeCommand` | Execute Command node disabled by default in n8n v2+. | Ensure `NODES_EXCLUDE=[]` and `N8N_ENABLE_UNSAFE_CORE_NODES=true` are set in `docker-compose.yml`. |
+| `AbortExtraction: HTTP redirect to login page` | Expired Instagram cookies. | Refresh and paste updated cookies into `cookies.txt`. |
+| `Rate limit exceeded on GitHub lookup` | Unauthenticated GitHub API rate limits. | Handled automatically with fallback to BeautifulSoup DOM search. |
+| `Unrecognized node type: executeCommand` | Execute Command node restricted in n8n default config. | Ensure `NODES_EXCLUDE=[]` and `N8N_ENABLE_UNSAFE_CORE_NODES=true` are set in `docker-compose.yml`. |
+| `Workflow execution error` | Unexpected runtime exception or upstream API issue. | Handled automatically by the `Error Trigger` node and routed to `#error-log`. |
+
+---
+
+## 🔒 Security & Privacy
+
+* **Zero Hardcoded Secrets:** All tokens and credentials are read strictly from environment variables or secure n8n credential storage.
+* **Push Protection Compliant:** No private auth keys, webhook secrets, or token strings are committed to version control.
