@@ -49,6 +49,7 @@ def generate_digest():
             valid_items = []
             if isinstance(msgs, list):
                 for m in msgs:
+                    # Filter messages in last 24h
                     ts_str = m.get("timestamp", "")
                     if ts_str:
                         ts_clean = ts_str.replace("Z", "+00:00")
@@ -70,15 +71,16 @@ def generate_digest():
                         title_match = re.search(r'^\*\*([^\n]+)\*\*', content, re.MULTILINE)
 
                     title = title_match.group(1).strip() if title_match else ""
-                    title = re.sub(r'[#*`>]', '', title).strip()
+                    title = re.sub(r'[#*`>🍳💻🏋️🎌🎬📌🎭]', '', title).strip()
 
-                    if not title or len(title) < 3 or any(title.startswith(b) for b in ["Where to Watch", "Bonus Note", "Links:", "Update:"]):
+                    if not title or len(title) < 3 or any(title.startswith(b) for b in ["Where to Watch", "Bonus Note", "Links:", "Update:", "Note:"]):
                         continue
 
                     # Extract link
                     gh_match = re.search(r'🔗?\s*\*\*GitHub:\*\*\s*(https?://\S+)', content, re.IGNORECASE)
                     imdb_match = re.search(r'🎬?\s*\*\*IMDb:\*\*\s*(https?://\S+)', content, re.IGNORECASE)
-                    src_match = re.search(r'🔗?\s*\*\*Source:\*\*\s*(https?://\S+)', content, re.IGNORECASE) or re.search(r'https?://\S+', content)
+                    src_match = re.search(r'🔗?\s*\*\*Source:\*\*\s*(https?://\S+)', content, re.IGNORECASE)
+                    raw_match = re.search(r'https?://\S+', content)
 
                     link = ""
                     if gh_match:
@@ -87,14 +89,21 @@ def generate_digest():
                         link = imdb_match.group(1).strip()
                     elif src_match:
                         link = src_match.group(1).strip()
+                    elif raw_match:
+                        link = raw_match.group(0).strip()
+
+                    link = re.sub(r'[\)\]\s]+$', '', link)
 
                     msg_id = m.get("id")
                     channel_id = m.get("channel_id")
                     message_link = f"https://discord.com/channels/{channel_id}/{msg_id}"
                     final_link = link or message_link
 
-                    if not any(v["title"].lower() == title.lower() for v in valid_items):
-                        valid_items.append({"title": title, "link": final_link})
+                    # Simplify title if it contains extra separator details
+                    display_title = title.split("•")[0].strip() if "•" in title and len(title.split("•")[0].strip()) > 3 else title
+
+                    if not any(v["title"].lower() == display_title.lower() for v in valid_items):
+                        valid_items.append({"title": display_title, "link": final_link})
                         total_count += 1
 
             if valid_items:

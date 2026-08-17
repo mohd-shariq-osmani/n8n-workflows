@@ -16,6 +16,8 @@ services:
       - N8N_PROXY_HOPS=1
       - NODE_FUNCTION_ALLOW_BUILTIN=*
       - NODE_FUNCTION_ALLOW_EXTERNAL=*
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-1527074193823498283}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./config.json:/home/node/.config/gallery-dl/config.json:ro
