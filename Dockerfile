@@ -1,6 +1,6 @@
 FROM python:3.12-alpine AS builder
 
-RUN apk add --no-cache ffmpeg flac tesseract-ocr
+RUN apk add --no-cache ffmpeg flac tesseract-ocr tesseract-ocr-data-eng
 RUN pip install --no-cache-dir gallery-dl yt-dlp SpeechRecognition pytesseract Pillow
 
 FROM docker.n8n.io/n8nio/n8n:latest
@@ -16,7 +16,10 @@ COPY --from=builder /usr/bin/tesseract /usr/bin/tesseract
 COPY --from=builder /usr/share/tessdata /usr/share/tessdata
 COPY --from=builder /usr/lib /usr/lib
 
+ENV TESSDATA_PREFIX=/usr/share/tessdata
+
 COPY scrape_instagram.py /usr/local/bin/scrape_instagram.py
-RUN chmod +x /usr/local/bin/scrape_instagram.py
+COPY analyze_image.py /usr/local/bin/analyze_image.py
+RUN chmod +x /usr/local/bin/scrape_instagram.py /usr/local/bin/analyze_image.py
 
 USER node
