@@ -3,25 +3,56 @@ import sys
 import os
 import json
 import urllib.request
-import urllib.error
+import urllib.parse
 import base64
 from PIL import Image, ImageEnhance
 import pytesseract
 import io
+import re
+import unicodedata
 
-LM_STUDIO_HOST = os.environ.get("LM_STUDIO_HOST", "http://192.168.0.50:1234")
+LM_STUDIO_HOST = os.environ.get("LM_STUDIO_HOST", "http://host.docker.internal:1234")
+
+def get_exact_imdb_url(query):
+    if not query or len(query.strip()) < 2:
+        return ""
+    try:
+        query = unicodedata.normalize('NFKD', query)
+        # Try both direct and normalized query variations
+        variations = [
+            query,
+            query.replace("are", "re").replace("'", ""),
+            re.sub(r'[^a-zA-Z0-9\s]', '', query)
+        ]
+        for var in variations:
+            clean = ''.join(c.lower() for c in var if c.isalnum() or c.isspace()).strip().replace(' ', '_')
+            if not clean:
+                continue
+            url = f"https://v3.sg.media-imdb.com/suggestion/x/{urllib.parse.quote(clean)}.json"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                items = data.get("d", [])
+                for item in items:
+                    item_id = item.get("id")
+                    if item_id and item_id.startswith("tt"):
+                        # Prioritize features/series over people
+                        q_type = item.get("q", "")
+                        if q_type in ["feature", "TV series", "TV mini-series", "movie", "video"]:
+                            return f"https://www.imdb.com/title/{item_id}/"
+                        return f"https://www.imdb.com/title/{item_id}/"
+    except Exception:
+        pass
+    return ""
 
 def get_active_lm_studio_model():
-    """Dynamically query LM Studio to get the currently loaded model ID."""
     try:
         req = urllib.request.Request(f"{LM_STUDIO_HOST}/v1/models", headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             models = [m["id"] for m in data.get("data", [])]
             if not models:
                 return None
-            
-            # Prioritize vision-capable models if present
             vision_models = [m for m in models if any(k in m.lower() for k in ["vl", "vision", "minicpm", "ocr", "gemma", "qwen"])]
             if vision_models:
                 return vision_models[0]
@@ -30,14 +61,12 @@ def get_active_lm_studio_model():
         return None
 
 def extract_with_vision_ai(image_bytes, timeout=40):
-    """Extract text using Vision LLM from LM Studio."""
     model_id = get_active_lm_studio_model()
     if not model_id:
         return None
 
     try:
         img = Image.open(io.BytesIO(image_bytes))
-        # Keep crisp resolution for fine text
         if max(img.width, img.height) > 1024:
             img.thumbnail((1024, 1024))
         buf = io.BytesIO()
@@ -52,7 +81,7 @@ def extract_with_vision_ai(image_bytes, timeout=40):
                     "content": [
                         {
                             "type": "text",
-                            "text": "Transcribe and extract all text, ingredients with exact measurements, numbers, titles, and instructions from this image accurately in order. Be 100% faithful to the image text."
+                            "text": "Transcribe and extract all text, ingredients, numbers, titles, and instructions from this image accurately in order. Be 100% faithful to the image text."
                         },
                         {
                             "type": "image_url",
@@ -77,12 +106,11 @@ def extract_with_vision_ai(image_bytes, timeout=40):
             content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
             if content and len(content) > 5:
                 return content
-    except Exception as e:
+    except Exception:
         pass
     return None
 
 def extract_with_enhanced_ocr(image_bytes):
-    """High-contrast preprocessed Tesseract OCR fallback."""
     try:
         img = Image.open(io.BytesIO(image_bytes))
         target_w = max(img.width * 2, 1200)
@@ -94,7 +122,7 @@ def extract_with_enhanced_ocr(image_bytes):
         enhanced = enhancer.enhance(2.2)
         
         texts = []
-        for psm in [6, 4, 3]:
+        for psm in [6, 4, 3, 11]:
             try:
                 t = pytesseract.image_to_string(enhanced, config=f"--psm {psm} --oem 3").strip()
                 if t:
@@ -113,6 +141,8 @@ def extract_with_enhanced_ocr(image_bytes):
 def analyze_image(url_or_path):
     result = {
         "imageText": "",
+        "detectedTitle": "",
+        "imdbUrl": "",
         "hasText": False,
         "method": "none",
         "error": None
@@ -127,18 +157,28 @@ def analyze_image(url_or_path):
             with open(url_or_path, "rb") as f:
                 image_bytes = f.read()
 
-        # Step 1: High-precision Vision AI (LM Studio with dynamic model ID)
         ai_text = extract_with_vision_ai(image_bytes)
         if ai_text:
             result["imageText"] = ai_text
             result["hasText"] = True
             result["method"] = "ai_vision"
         else:
-            # Step 2: Fallback to Enhanced Preprocessed OCR
             ocr_text = extract_with_enhanced_ocr(image_bytes)
             result["imageText"] = ocr_text
             result["hasText"] = len(ocr_text) > 5
             result["method"] = "enhanced_ocr"
+
+        # Discover movie/show title and IMDb link from extracted image text
+        if result["imageText"]:
+            lines = [l.strip() for l in result["imageText"].splitlines() if l.strip()]
+            for l in lines[:5]:
+                clean_l = re.sub(r'[#@\(\)0-9:·•]', ' ', l).strip()
+                if len(clean_l) >= 3 and clean_l.lower() not in ["google", "search", "trailer", "youtube", "cbfc", "where to watch"]:
+                    imdb = get_exact_imdb_url(clean_l)
+                    if imdb:
+                        result["detectedTitle"] = clean_l
+                        result["imdbUrl"] = imdb
+                        break
 
     except Exception as e:
         result["error"] = str(e)
