@@ -5,49 +5,79 @@ import json
 import urllib.request
 import urllib.error
 import base64
-import tempfile
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance
 import pytesseract
 import io
 
-LM_STUDIO_URL = os.environ.get("LM_STUDIO_URL", "http://192.168.0.50:1234/v1/chat/completions")
+LM_STUDIO_HOST = os.environ.get("LM_STUDIO_HOST", "http://192.168.0.50:1234")
 
-def extract_with_vision_ai(image_bytes, timeout=12):
-    """Attempt to extract text using Vision LLM in LM Studio."""
+def get_active_lm_studio_model():
+    """Dynamically query LM Studio to get the currently loaded model ID."""
     try:
-        # Resize image for fast vision tokenization
+        req = urllib.request.Request(f"{LM_STUDIO_HOST}/v1/models", headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            models = [m["id"] for m in data.get("data", [])]
+            if not models:
+                return None
+            
+            # Prioritize vision-capable models if present
+            vision_models = [m for m in models if any(k in m.lower() for k in ["vl", "vision", "minicpm", "ocr", "gemma", "qwen"])]
+            if vision_models:
+                return vision_models[0]
+            return models[0]
+    except Exception:
+        return None
+
+def extract_with_vision_ai(image_bytes, timeout=40):
+    """Extract text using Vision LLM from LM Studio."""
+    model_id = get_active_lm_studio_model()
+    if not model_id:
+        return None
+
+    try:
         img = Image.open(io.BytesIO(image_bytes))
-        img.thumbnail((768, 768))
+        # Keep crisp resolution for fine text
+        if max(img.width, img.height) > 1024:
+            img.thumbnail((1024, 1024))
         buf = io.BytesIO()
-        img.convert("RGB").save(buf, format="JPEG", quality=85)
+        img.convert("RGB").save(buf, format="JPEG", quality=90)
         b64_img = base64.b64encode(buf.getvalue()).decode("utf-8")
 
         payload = {
-            "model": "default",
+            "model": model_id,
             "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Transcribe and extract all text, ingredients, numbers, and instructions from this image accurately in order. Output only the extracted content."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
+                        {
+                            "type": "text",
+                            "text": "Transcribe and extract all text, ingredients with exact measurements, numbers, titles, and instructions from this image accurately in order. Be 100% faithful to the image text."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{b64_img}"
+                            }
+                        }
                     ]
                 }
             ],
             "temperature": 0.1,
-            "max_tokens": 1000
+            "max_tokens": 1200
         }
 
         req = urllib.request.Request(
-            LM_STUDIO_URL,
+            f"{LM_STUDIO_HOST}/v1/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            if content and len(content) > 10:
+            if content and len(content) > 5:
                 return content
-    except Exception:
+    except Exception as e:
         pass
     return None
 
@@ -55,18 +85,14 @@ def extract_with_enhanced_ocr(image_bytes):
     """High-contrast preprocessed Tesseract OCR fallback."""
     try:
         img = Image.open(io.BytesIO(image_bytes))
-        
-        # 1. Upscale for small/handwritten fonts
         target_w = max(img.width * 2, 1200)
         target_h = int(img.height * (target_w / img.width))
         img_large = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
         
-        # 2. Convert to Grayscale & enhance contrast
         gray = img_large.convert("L")
         enhancer = ImageEnhance.Contrast(gray)
         enhanced = enhancer.enhance(2.2)
         
-        # 3. Multi-PSM scanning (PSM 6: Uniform block of text, PSM 4: Column text, PSM 3: Default page)
         texts = []
         for psm in [6, 4, 3]:
             try:
@@ -77,9 +103,7 @@ def extract_with_enhanced_ocr(image_bytes):
                 pass
         
         if texts:
-            # Pick the longest/most complete transcription
             best = max(texts, key=len)
-            # Clean empty lines
             lines = [line.strip() for line in best.split("\n") if line.strip()]
             return "\n".join(lines)
     except Exception as e:
@@ -97,13 +121,13 @@ def analyze_image(url_or_path):
     try:
         if url_or_path.startswith("http://") or url_or_path.startswith("https://"):
             req = urllib.request.Request(url_or_path, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=20) as resp:
                 image_bytes = resp.read()
         else:
             with open(url_or_path, "rb") as f:
                 image_bytes = f.read()
 
-        # Step 1: Try AI Vision Agent (LM Studio)
+        # Step 1: High-precision Vision AI (LM Studio with dynamic model ID)
         ai_text = extract_with_vision_ai(image_bytes)
         if ai_text:
             result["imageText"] = ai_text
