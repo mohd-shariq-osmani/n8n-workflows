@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-08-17T07:39:28.187Z",
+  "createdAt": "2026-07-18T02:03:32.828Z",
+  "id": "8LsAKNbUxJSe95QY",
   "name": "Discord AI Router + Recipe Agent",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -119,7 +125,7 @@
     },
     {
       "parameters": {
-        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "model": "openai/gpt-oss-20b:free",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
@@ -132,8 +138,8 @@
       "name": "OpenRouter Chat Model",
       "credentials": {
         "openRouterApi": {
-          "id": "i5y9kaWrfbCrXmZx",
-          "name": "OpenRouter account"
+          "id": "AkuizHWmY8Kg2C5Z",
+          "name": "OpenRouter account 2"
         }
       }
     },
@@ -158,26 +164,6 @@
       ],
       "id": "2224c5dc-1dd2-4251-8296-925f680a2379",
       "name": "Basic LLM Chain1"
-    },
-    {
-      "parameters": {
-        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "typeVersion": 1,
-      "position": [
-        2560,
-        1760
-      ],
-      "id": "025e2377-9600-47cc-87b2-002a300cbddc",
-      "name": "OpenRouter Chat Model1",
-      "credentials": {
-        "openRouterApi": {
-          "id": "i5y9kaWrfbCrXmZx",
-          "name": "OpenRouter account"
-        }
-      }
     },
     {
       "parameters": {
@@ -352,10 +338,10 @@
         },
         "channelId": {
           "__rl": true,
-          "value": "1527849679683850252",
+          "value": "1527858942594646056",
           "mode": "list",
           "cachedResultName": "workout",
-          "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1527849679683850252"
+          "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1527858942594646056"
         },
         "content": "={{ $json.finalContent || $json.markdown }}",
         "options": {},
@@ -439,10 +425,10 @@
         },
         "channelId": {
           "__rl": true,
-          "value": "1527849679683850253",
+          "value": "1527859066259374212",
           "mode": "list",
-          "cachedResultName": "movies-tv",
-          "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1527849679683850253"
+          "cachedResultName": "movie-tv",
+          "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1527859066259374212"
         },
         "content": "={{ $json.finalContent || $json.markdown }}",
         "options": {},
@@ -611,7 +597,8 @@
         "rule": {
           "interval": [
             {
-              "field": "minutes"
+              "field": "minutes",
+              "minutesInterval": 1
             }
           ]
         }
@@ -668,7 +655,7 @@
       "typeVersion": 1.9,
       "position": [
         1680,
-        2032
+        2192
       ],
       "id": "556d4ff2-af38-4438-a135-2f8669c1f19d",
       "name": "Basic LLM Chain"
@@ -682,7 +669,7 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        1380,
+        1392,
         1888
       ],
       "onError": "continueRegularOutput"
@@ -696,7 +683,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1560,
+        1568,
         1888
       ]
     },
@@ -707,18 +694,17 @@
         "messages": {
           "messageValues": [
             {
-              "type": "system",
               "message": "You are GeneralGPT. Create a complete, clean Discord summary card for general content, articles, news, or miscellaneous topics.\n\nRules:\n- Capture all main takeaways and core details from the source transcript or text.\n- Keep each bullet informative, clear, and fluff-free.\n\nFormat:\n**\ud83d\udccc [Topic / Item Name]** \u2014 *[One-line description]*\n\n**\ud83d\udca1 Key Takeaways:**\n\u2022 [Key point 1]\n\u2022 [Key point 2]\n\u2022 [Key point 3]\n(Include all primary points)\n\n**\ud83d\udd17 Source:** [Link if available]"
             }
           ]
         },
-        "hasOutputParser": false
+        "batching": {}
       },
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        2480,
-        2512
+        2464,
+        2560
       ],
       "id": "a1a2bf52-955d-4019-b8d7-4027b4ba2afb",
       "name": "Basic LLM Chain (Others)"
@@ -761,9 +747,10 @@
         },
         "channelId": {
           "__rl": true,
-          "value": "others",
-          "mode": "name",
-          "cachedResultName": "others"
+          "value": "1538704806900797450",
+          "mode": "list",
+          "cachedResultName": "others",
+          "cachedResultUrl": "https://discord.com/channels/1527074193269592206/1538704806900797450"
         },
         "content": "={{ $json.finalContent || $json.markdown }}",
         "options": {},
@@ -779,15 +766,42 @@
       ],
       "id": "c76fe3dd-3629-4fba-8692-4c7d6a2b7d86",
       "name": "Create Others Post",
+      "webhookId": "930ac4a1-5778-4cd5-95c5-89a5dc1cbe1b",
       "credentials": {
         "discordBotApi": {
           "id": "Zr8t8Yruimx7lO52",
           "name": "Discord Bot account"
         }
       }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "default",
+          "mode": "id"
+        },
+        "options": {
+          "baseURL": "http://192.168.0.50:1234/v1",
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        1820
+      ],
+      "id": "b3e94519-lm-studio-node-001",
+      "name": "LM Studio Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "LMStudioOpenAi1",
+          "name": "LM Studio account"
+        }
+      }
     }
   ],
-  "pinData": {},
   "connections": {
     "Get Discord Messages": {
       "main": [
@@ -828,48 +842,6 @@
           {
             "node": "Code in JavaScript",
             "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenRouter Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Basic LLM Chain (Project)",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "Basic LLM Chain (Workout)",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "Basic LLM Chain (Media)",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "Basic LLM Chain",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenRouter Chat Model1": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Basic LLM Chain1",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "Basic LLM Chain (Others)",
-            "type": "ai_languageModel",
             "index": 0
           }
         ]
@@ -1140,18 +1112,94 @@
           }
         ]
       ]
+    },
+    "LM Studio Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain (Project)",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain (Workout)",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain (Media)",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain (Others)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": true,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "92d42333-621c-4a29-9c25-a2ac07c72266",
+  "staticData": {
+    "node:Every 5 Minutes": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    },
+    "global": {
+      "lastMessageId": "1538818099057270815"
+    }
+  },
   "meta": {
     "instanceId": "b41c50ba71706a597f30e37320038d6fe8a3dc79f26cca38a16f862f19ba2901"
   },
   "nodeGroups": [],
-  "id": "8LsAKNbUxJSe95QY",
-  "tags": []
+  "pinData": {},
+  "versionId": "352a9e27-f683-47e9-b74f-8c61109b5e97",
+  "activeVersionId": "352a9e27-f683-47e9-b74f-8c61109b5e97",
+  "versionCounter": 186,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-07-18T02:03:32.831Z",
+      "createdAt": "2026-07-18T02:03:32.831Z",
+      "role": "workflow:owner",
+      "workflowId": "8LsAKNbUxJSe95QY",
+      "projectId": "lDYxPtHfq2sojaig",
+      "project": {
+        "updatedAt": "2026-07-15T21:58:27.034Z",
+        "createdAt": "2026-07-15T21:54:12.848Z",
+        "id": "lDYxPtHfq2sojaig",
+        "name": "Shariq Osmani <shariqosmani2@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "a7c32c95-e437-4243-8a0f-3fa997e0f27d"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version 352a9e27",
+    "description": ""
+  }
 }
