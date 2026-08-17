@@ -10,6 +10,7 @@ import urllib.request
 import urllib.parse
 import http.cookiejar
 import html
+import unicodedata
 from bs4 import BeautifulSoup
 
 def clean_vtt(vtt_text):
@@ -46,9 +47,11 @@ def get_exact_imdb_url(query):
     if not query or len(query.strip()) < 2:
         return ""
     try:
+        # Normalize Unicode fancy letters (e.g. math bold 𝐓𝐢𝐭𝐥𝐞)
+        query = unicodedata.normalize('NFKD', query)
         clean = ''.join(c.lower() for c in query if c.isalnum() or c.isspace()).strip()
         clean = clean.replace(' ', '_')
-        if not clean or clean in ["movie", "movie_name", "film", "series", "anime", "name"]:
+        if not clean or clean in ["movie", "movie_name", "film", "series", "anime", "name", "anime_name"]:
             return ""
         url = f"https://v3.sg.media-imdb.com/suggestion/x/{urllib.parse.quote(clean)}.json"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
@@ -66,7 +69,7 @@ def get_exact_imdb_url(query):
 def search_github_repo(query):
     if not query or len(query.strip()) < 3:
         return ""
-    query = query.strip()
+    query = unicodedata.normalize('NFKD', query).strip()
     
     # 1. Direct GitHub API search
     try:
@@ -174,25 +177,40 @@ def extract_instagram_comments(shortcode, cookies_path, max_comments=100):
         pass
     return ""
 
-def find_imdb_in_text(text):
-    if not text:
-        return ""
-    # Try finding explicit mentions like "Movie: Argylle" or "Movie name: Argylle"
-    patterns = [
-        r'(?:movie(?:\s+name)?[:\s\-]+)([A-Za-z0-9\s]{2,40})',
-        r'(?:film(?:\s+name)?[:\s\-]+)([A-Za-z0-9\s]{2,40})',
-        r'(?:series(?:\s+name)?[:\s\-]+)([A-Za-z0-9\s]{2,40})',
-        r'(?:anime(?:\s+name)?[:\s\-]+)([A-Za-z0-9\s]{2,40})',
-        r'(?:manhwa(?:\s+name)?[:\s\-]+)([A-Za-z0-9\s]{2,40})',
-    ]
-    for p in patterns:
-        matches = re.findall(p, text, re.IGNORECASE)
-        for m in matches:
-            clean = m.strip().split("\n")[0].split(".")[0].strip()
-            if len(clean) >= 2 and clean.lower() not in ["name", "pls", "please", "bro"]:
-                url = get_exact_imdb_url(clean)
-                if url:
-                    return url
+def find_imdb_in_text(caption_text, comments_text=""):
+    # 1. Search normalized caption first (highest priority)
+    if caption_text:
+        norm_cap = unicodedata.normalize('NFKD', caption_text)
+        cap_patterns = [
+            r'(?:title|name)[:\s\-]+([A-Za-z0-9\'\s]{3,60})',
+            r'(?:anime|donghua|manga|manhwa|movie|series)[:\s\-]+([A-Za-z0-9\'\s]{3,60})',
+        ]
+        for p in cap_patterns:
+            matches = re.findall(p, norm_cap, re.IGNORECASE)
+            for m in matches:
+                clean = m.strip().split("\n")[0].split(".")[0].strip()
+                if len(clean) >= 3 and clean.lower() not in ["info", "name", "title", "ongoing", "yes", "season"]:
+                    url = get_exact_imdb_url(clean)
+                    if url:
+                        return url
+
+    # 2. Search comments if not found in caption
+    if comments_text:
+        comm_patterns = [
+            r'(?:movie(?:\s+name)?[:\s\-]+)([A-Za-z0-9\'\s]{3,40})',
+            r'(?:anime(?:\s+name)?[:\s\-]+)([A-Za-z0-9\'\s]{3,40})',
+            r'(?:series(?:\s+name)?[:\s\-]+)([A-Za-z0-9\'\s]{3,40})',
+            r'(?:film(?:\s+name)?[:\s\-]+)([A-Za-z0-9\'\s]{3,40})',
+        ]
+        for p in comm_patterns:
+            matches = re.findall(p, comments_text, re.IGNORECASE)
+            for m in matches:
+                clean = m.strip().split("\n")[0].split(".")[0].strip()
+                if len(clean) >= 3 and clean.lower() not in ["name", "pls", "please", "bro", "redo of healer"]:
+                    url = get_exact_imdb_url(clean)
+                    if url:
+                        return url
+
     return ""
 
 def scrape_youtube(url):
@@ -317,7 +335,7 @@ def scrape_youtube(url):
     if result["title"]:
         result["imdbUrl"] = get_exact_imdb_url(result["title"])
     if not result["imdbUrl"]:
-        result["imdbUrl"] = find_imdb_in_text(combined_text)
+        result["imdbUrl"] = find_imdb_in_text(result["caption"], result["comments"])
 
     return result
 
@@ -435,14 +453,8 @@ def scrape_instagram(url):
         if len(first_clean) > 5:
             result["githubUrl"] = search_github_repo(first_clean)
 
-    # Search IMDb from Caption OR Comments
-    first_line = result["caption"].split("\n")[0] if result["caption"] else ""
-    first_clean = re.sub(r'[#@\(\)]', '', first_line).strip()
-    if first_clean and len(first_clean) > 2:
-        result["imdbUrl"] = get_exact_imdb_url(first_clean)
-
-    if not result["imdbUrl"]:
-        result["imdbUrl"] = find_imdb_in_text(combined_text)
+    # Search IMDb from normalized Caption first, then Comments
+    result["imdbUrl"] = find_imdb_in_text(result["caption"], result["comments"])
 
     return result
 
