@@ -7,6 +7,15 @@ import urllib.parse
 import re
 import unicodedata
 
+def normalize_text(text):
+    if not text:
+        return ""
+    norm = unicodedata.normalize('NFKD', text)
+    clean = re.sub(r'[\#\*\_\(\)🎬🎌🏷️•\>\:\-\,\.\'\"]', ' ', norm)
+    clean = re.sub(r'\b(20\d\d|19\d\d)\b', '', clean)
+    clean = re.sub(r'\b(anime|manga|manhwa|manhua|webtoon|movie|series|tv|season|show|recommendation|complete series|hindi dubbed)\b', '', clean, flags=re.IGNORECASE)
+    return ' '.join(clean.lower().split()).strip()
+
 def get_imdb_meta_by_id(tt_id):
     if not tt_id:
         return None
@@ -37,23 +46,18 @@ def lookup_imdb_precise(title_query):
         if meta:
             return meta["title"], meta["imdbUrl"]
 
-    norm = unicodedata.normalize('NFKD', title_query)
-    year_match = re.search(r'\((\d{4})\)', norm)
+    year_match = re.search(r'\((\d{4})\)', title_query)
     target_year = int(year_match.group(1)) if year_match else None
+    query_norm = normalize_text(title_query)
     
-    clean = re.sub(r'[\#\*\_\(\)🎬🎌🏷️•\>\:\-]', ' ', norm)
-    clean = re.sub(r'\b(20\d\d|19\d\d)\b', '', clean)
-    clean = re.sub(r'\b(anime|manga|manhwa|manhua|webtoon|movie|series|tv|season|show|recommendation|complete series|hindi dubbed)\b', '', clean, flags=re.IGNORECASE)
-    clean = ' '.join(clean.split()).strip()
-    
-    if len(clean) < 2:
+    if len(query_norm) < 2:
         return None, ""
         
     variations = [
-        clean,
-        clean.replace(' ', '_'),
-        re.sub(r'[^a-zA-Z0-9\s]', '', clean),
-        re.sub(r'[^a-zA-Z0-9\s]', '', clean).replace(' ', '_')
+        query_norm,
+        query_norm.replace(' ', '_'),
+        re.sub(r'[^a-zA-Z0-9\s]', '', query_norm),
+        re.sub(r'[^a-zA-Z0-9\s]', '', query_norm).replace(' ', '_')
     ]
     
     candidates = []
@@ -79,23 +83,40 @@ def lookup_imdb_precise(title_query):
         return None, ""
         
     def score(it):
-        item_title = it.get('l', '').lower().strip()
-        query_lower = clean.lower()
+        item_title = it.get('l', '').strip()
+        item_norm = normalize_text(item_title)
         
-        exact_match = 100 if item_title == query_lower else (50 if query_lower in item_title or item_title in query_lower else 0)
-        
+        # 1. Punctuation-immune Title Match
+        if item_norm == query_norm:
+            title_score = 150
+        elif query_norm in item_norm:
+            title_score = 40
+        elif item_norm in query_norm:
+            title_score = 30
+        else:
+            title_score = 0
+
+        # 2. Release Year score
         item_year = it.get('y')
         year_score = 0
         if target_year and item_year:
-            year_score = 40 if abs(item_year - target_year) <= 1 else -10
+            year_score = 50 if abs(item_year - target_year) <= 1 else -20
         elif item_year:
-            year_score = 5
+            year_score = 10
 
+        # 3. Media Type score
         q_type = it.get('q', '')
-        is_primary = 20 if q_type in ['feature', 'TV series', 'TV mini-series', 'movie', 'tvSpecial'] else 0
-        
+        if q_type in ['feature', 'movie']:
+            type_score = 60
+        elif q_type in ['TV series', 'TV mini-series', 'tvSpecial']:
+            type_score = 50
+        elif q_type in ['short', 'video', 'podcastEpisode']:
+            type_score = -50
+        else:
+            type_score = 0
+
         rank = it.get('rank', 999999)
-        total_score = exact_match + year_score + is_primary
+        total_score = title_score + year_score + type_score
         return (-total_score, rank)
 
     candidates.sort(key=score)
@@ -107,7 +128,7 @@ def verify_and_patch_markdown(markdown_text):
     if not markdown_text:
         return markdown_text
 
-    # 1. Extract existing tt ID in markdown if it came from a verified source
+    # 1. Check if input contains an existing canonical tt ID
     existing_tt = re.search(r'imdb\.com/title/(tt\d+)', markdown_text)
     
     # 2. Extract H1 Header Title (e.g. # 🎬 Blade: The Series (2006))
