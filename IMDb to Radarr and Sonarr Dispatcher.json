@@ -114,7 +114,7 @@
           "mode": "list",
           "cachedResultName": "error-log"
         },
-        "content": "=🚨 **IMDb Media Router Error**\n**Input:** {{ $json.rawContent || $json.content || 'N/A' }}\n**Error:** {{ $json.error || 'Unknown error processing media item' }}",
+        "content": "=🚨 **Media Dispatcher Notice**\n> ❌ **Issue:** {{ $json.error || 'Unknown error processing media item' }}\n> 📥 **Input:** `{{ $json.rawContent || $json.content || 'N/A' }}`\n> 🔍 **Service:** {{ $json.service || 'Radarr / Sonarr / Jellyfin' }}",
         "options": {},
         "embeds": {
           "values": []
