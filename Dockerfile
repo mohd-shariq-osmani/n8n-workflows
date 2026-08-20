@@ -21,6 +21,7 @@ ENV TESSDATA_PREFIX=/usr/share/tessdata
 COPY universal_scraper.py /usr/local/bin/universal_scraper.py
 COPY scrape_instagram.py /usr/local/bin/scrape_instagram.py
 COPY analyze_image.py /usr/local/bin/analyze_image.py
-RUN chmod +x /usr/local/bin/universal_scraper.py /usr/local/bin/scrape_instagram.py /usr/local/bin/analyze_image.py
+COPY media_dispatcher.py /usr/local/bin/media_dispatcher.py
+RUN chmod +x /usr/local/bin/universal_scraper.py /usr/local/bin/scrape_instagram.py /usr/local/bin/analyze_image.py /usr/local/bin/media_dispatcher.py
 
 USER node

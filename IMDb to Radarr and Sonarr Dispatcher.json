@@ -1,0 +1,186 @@
+{
+  "id": "M8RadarrSonarr99",
+  "name": "Discord IMDb to Radarr & Sonarr Dispatcher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "movie-tv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        200
+      ],
+      "id": "webhook-movie-tv",
+      "name": "Webhook (Movie/TV Intake)",
+      "webhookId": "movie-tv-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\n\nconst results = [];\nfor (const item of $input.all()) {\n  const body = item.json.body || item.json;\n  const content = body.content || body.url || body.imdbUrl || body.link || JSON.stringify(body);\n\n  try {\n    const cmd = `python3 /usr/local/bin/media_dispatcher.py ${JSON.stringify(content)}`;\n    const stdout = execSync(cmd, { encoding: 'utf-8', timeout: 30000 });\n    const parsed = JSON.parse(stdout.trim());\n    results.push({\n      json: {\n        ...body,\n        ...parsed,\n        rawContent: content\n      }\n    });\n  } catch (err) {\n    results.push({\n      json: {\n        ...body,\n        success: false,\n        error: err.message || String(err),\n        rawContent: content\n      }\n    });\n  }\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        50,
+        200
+      ],
+      "id": "extract-route-media",
+      "name": "Extract & Route Media"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        300,
+        200
+      ],
+      "id": "if-success",
+      "name": "If Success"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "1527074193269592206",
+          "mode": "list",
+          "cachedResultName": "AutoBot"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "1527859066259374212",
+          "mode": "list",
+          "cachedResultName": "movie-tv"
+        },
+        "content": "={{ $json.message || ($json.mediaType === 'Movie' ? '\ud83c\udfac **' + $json.title + ' (' + $json.year + ')** added to **Radarr**!' : '\ud83d\udcfa **' + $json.title + ' (' + $json.year + ')** added to **Sonarr**!') }}",
+        "options": {},
+        "embeds": {
+          "values": []
+        }
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        550,
+        100
+      ],
+      "id": "post-confirmation",
+      "name": "Post Confirmation to #movie-tv",
+      "credentials": {
+        "discordBotApi": {
+          "id": "Zr8t8Yruimx7lO52",
+          "name": "Discord Bot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "1527074193269592206",
+          "mode": "list",
+          "cachedResultName": "AutoBot"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "1538862861718261900",
+          "mode": "list",
+          "cachedResultName": "error-log"
+        },
+        "content": "=\ud83d\udea8 **IMDb Media Router Error**\n**Input:** {{ $json.rawContent || $json.content || 'N/A' }}\n**Error:** {{ $json.error || 'Unknown error processing media item' }}",
+        "options": {},
+        "embeds": {
+          "values": []
+        }
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        550,
+        300
+      ],
+      "id": "send-error-log",
+      "name": "Send Error to #error-log",
+      "credentials": {
+        "discordBotApi": {
+          "id": "Zr8t8Yruimx7lO52",
+          "name": "Discord Bot account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook (Movie/TV Intake)": {
+      "main": [
+        [
+          {
+            "node": "Extract & Route Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Route Media": {
+      "main": [
+        [
+          {
+            "node": "If Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Success": {
+      "main": [
+        [
+          {
+            "node": "Post Confirmation to #movie-tv",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error to #error-log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

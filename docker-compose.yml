@@ -18,10 +18,16 @@ services:
       - NODE_FUNCTION_ALLOW_EXTERNAL=*
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-1527074193823498283}
+      - DISCORD_MOVIE_TV_CHANNEL_ID=${DISCORD_MOVIE_TV_CHANNEL_ID:-1527859066259374212}
+      - RADARR_HOST=http://host.docker.internal:7878
+      - RADARR_API_KEY=${RADARR_API_KEY:-ebd830d1dbd34d299e45ad204ea33a23}
+      - SONARR_HOST=http://host.docker.internal:8989
+      - SONARR_API_KEY=${SONARR_API_KEY:-71f36ff7d42f46ffaef9d8ca8752670b}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./config.json:/home/node/.config/gallery-dl/config.json:ro
       - ./cookies.txt:/home/node/.config/gallery-dl/cookies.txt:ro
+      - ./media_dispatcher.py:/usr/local/bin/media_dispatcher.py:ro
 
   ngrok:
     image: ngrok/ngrok:latest
@@ -41,9 +47,23 @@ services:
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-1527074193823498283}
+      - DISCORD_MOVIE_TV_CHANNEL_ID=${DISCORD_MOVIE_TV_CHANNEL_ID:-1527859066259374212}
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/discord-intake
+      - N8N_MOVIE_TV_WEBHOOK_URL=http://n8n:5678/webhook/movie-tv
     depends_on:
       - n8n
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: always
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=Asia/Kolkata
+    ports:
+      - "8191:8191"
 
 volumes:
   n8n_data:

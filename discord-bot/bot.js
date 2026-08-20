@@ -2,13 +2,14 @@ const { Client, GatewayIntentBits, Partials } = require("discord.js");
 const axios = require("axios");
 
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
+const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID || "1527074193823498283";
+const MOVIE_TV_CHANNEL_ID = process.env.DISCORD_MOVIE_TV_CHANNEL_ID || "1527859066259374212";
 
-if (!BOT_TOKEN || !CHANNEL_ID || !N8N_WEBHOOK_URL) {
-  console.error(
-    "Missing required env vars. Need DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID, N8N_WEBHOOK_URL."
-  );
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || "http://n8n:5678/webhook/discord-intake";
+const N8N_MOVIE_TV_WEBHOOK_URL = process.env.N8N_MOVIE_TV_WEBHOOK_URL || "http://n8n:5678/webhook/movie-tv";
+
+if (!BOT_TOKEN) {
+  console.error("Missing required DISCORD_BOT_TOKEN environment variable.");
   process.exit(1);
 }
 
@@ -23,20 +24,33 @@ const client = new Client({
 
 client.once("ready", () => {
   console.log(`Logged in as ${client.user.tag}`);
-  console.log(`Watching channel ID: ${CHANNEL_ID}`);
-  console.log(`Forwarding to: ${N8N_WEBHOOK_URL}`);
+  console.log(`Watching General intake channel: ${CHANNEL_ID} -> ${N8N_WEBHOOK_URL}`);
+  console.log(`Watching Movie/TV channel: ${MOVIE_TV_CHANNEL_ID} -> ${N8N_MOVIE_TV_WEBHOOK_URL}`);
 });
 
 client.on("messageCreate", async (message) => {
-  // Ignore messages from bots (including itself) to avoid loops
+  // Ignore messages from the bot itself to prevent feedback loops
+  if (message.author.id === client.user.id) return;
+  // Ignore other bots
   if (message.author.bot) return;
 
-  // Only forward messages from the configured intake channel
-  if (message.channelId !== CHANNEL_ID) return;
+  let targetWebhook = null;
+  let channelType = "unknown";
+
+  if (message.channelId === CHANNEL_ID) {
+    targetWebhook = N8N_WEBHOOK_URL;
+    channelType = "general-intake";
+  } else if (message.channelId === MOVIE_TV_CHANNEL_ID) {
+    targetWebhook = N8N_MOVIE_TV_WEBHOOK_URL;
+    channelType = "movie-tv";
+  } else {
+    return;
+  }
 
   const payload = {
     messageId: message.id,
     channelId: message.channelId,
+    channelType: channelType,
     authorId: message.author.id,
     authorUsername: message.author.username,
     content: message.content,
@@ -49,14 +63,14 @@ client.on("messageCreate", async (message) => {
   };
 
   try {
-    await axios.post(N8N_WEBHOOK_URL, payload, {
+    await axios.post(targetWebhook, payload, {
       headers: { "Content-Type": "application/json" },
-      timeout: 10000,
+      timeout: 15000,
     });
-    console.log(`Forwarded message ${message.id} to n8n`);
+    console.log(`Forwarded message ${message.id} from #${channelType} to ${targetWebhook}`);
   } catch (err) {
     console.error(
-      `Failed to forward message ${message.id}:`,
+      `Failed to forward message ${message.id} to ${targetWebhook}:`,
       err.response?.status,
       err.message
     );
