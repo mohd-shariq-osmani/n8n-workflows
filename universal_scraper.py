@@ -15,6 +15,40 @@ import html
 import unicodedata
 from bs4 import BeautifulSoup
 
+def get_imdb_meta_by_id(tt_id):
+    if not tt_id:
+        return None
+    try:
+        url = f"https://v3.sg.media-imdb.com/suggestion/x/{tt_id}.json"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for it in data.get("d", []):
+                if it.get("id") == tt_id:
+                    year = it.get("y")
+                    title_str = f"{it.get('l')} ({year})" if year else it.get('l')
+                    stars = it.get("s", "")
+                    q_type = it.get("q", "Movie / TV Show")
+                    img_url = it.get("i", {}).get("imageUrl", "")
+                    
+                    desc = f"{title_str} • Type: {q_type}"
+                    if stars:
+                        desc += f" • Starring: {stars}"
+                        
+                    return {
+                        "title": title_str,
+                        "cleanTitle": it.get("l"),
+                        "year": year,
+                        "type": q_type,
+                        "stars": stars,
+                        "caption": desc,
+                        "imageUrl": img_url,
+                        "imdbUrl": f"https://www.imdb.com/title/{tt_id}/"
+                    }
+    except Exception:
+        pass
+    return None
+
 def clean_vtt(vtt_text):
     lines = []
     for line in vtt_text.splitlines():
@@ -45,27 +79,79 @@ def transcribe_audio_file(audio_path):
         pass
     return ""
 
-def get_exact_imdb_url(query):
-    if not query or len(query.strip()) < 2:
-        return ""
-    try:
-        query = unicodedata.normalize('NFKD', query)
-        clean = ''.join(c.lower() for c in query if c.isalnum() or c.isspace()).strip()
-        clean = clean.replace(' ', '_')
-        if not clean or clean in ["movie", "movie_name", "film", "series", "anime", "name", "anime_name"]:
-            return ""
-        url = f"https://v3.sg.media-imdb.com/suggestion/x/{urllib.parse.quote(clean)}.json"
+def lookup_imdb_precise(title_query):
+    if not title_query or len(title_query.strip()) < 2:
+        return None, ""
+        
+    norm = unicodedata.normalize('NFKD', title_query)
+    year_match = re.search(r'\((\d{4})\)', norm)
+    target_year = int(year_match.group(1)) if year_match else None
+    
+    clean = re.sub(r'[\#\*\_\(\)🎬🎌🏷️•\>\:\-]', ' ', norm)
+    clean = re.sub(r'\b(20\d\d|19\d\d)\b', '', clean)
+    clean = re.sub(r'\b(anime|manga|manhwa|manhua|webtoon|movie|series|tv|season|show|recommendation|complete series|hindi dubbed)\b', '', clean, flags=re.IGNORECASE)
+    clean = ' '.join(clean.split()).strip()
+    
+    if len(clean) < 2:
+        return None, ""
+        
+    variations = [
+        clean,
+        clean.replace(' ', '_'),
+        re.sub(r'[^a-zA-Z0-9\s]', '', clean),
+        re.sub(r'[^a-zA-Z0-9\s]', '', clean).replace(' ', '_')
+    ]
+    
+    candidates = []
+    seen_ids = set()
+    for var in variations:
+        q = var.strip().replace(' ', '_').lower()
+        if not q:
+            continue
+        url = f"https://v3.sg.media-imdb.com/suggestion/x/{urllib.parse.quote(q)}.json"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            items = data.get("d", [])
-            for item in items:
-                item_id = item.get("id")
-                if item_id and item_id.startswith("tt"):
-                    return f"https://www.imdb.com/title/{item_id}/"
-    except Exception:
-        pass
-    return ""
+        try:
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                for it in data.get('d', []):
+                    item_id = it.get('id', '')
+                    if item_id.startswith('tt') and item_id not in seen_ids:
+                        candidates.append(it)
+                        seen_ids.add(item_id)
+        except Exception:
+            pass
+            
+    if not candidates:
+        return None, ""
+        
+    def score(it):
+        item_title = it.get('l', '').lower().strip()
+        query_lower = clean.lower()
+        
+        exact_match = 100 if item_title == query_lower else (50 if query_lower in item_title or item_title in query_lower else 0)
+        
+        item_year = it.get('y')
+        year_score = 0
+        if target_year and item_year:
+            year_score = 40 if abs(item_year - target_year) <= 1 else -10
+        elif item_year:
+            year_score = 5
+
+        q_type = it.get('q', '')
+        is_primary = 20 if q_type in ['feature', 'TV series', 'TV mini-series', 'movie', 'tvSpecial'] else 0
+        
+        rank = it.get('rank', 999999)
+        total_score = exact_match + year_score + is_primary
+        return (-total_score, rank)
+
+    candidates.sort(key=score)
+    best = candidates[0]
+    title_str = f"{best.get('l')} ({best.get('y')})" if best.get('y') else best.get('l')
+    return title_str, f"https://www.imdb.com/title/{best.get('id')}/"
+
+def get_exact_imdb_url(query):
+    title, link = lookup_imdb_precise(query)
+    return link
 
 def clean_project_query(text):
     if not text:
@@ -120,7 +206,6 @@ def search_github_repo(query):
     return ""
 
 def extract_instagram_comments(shortcode, cookies_path, max_comments=75):
-    """Extract comments safely with rate-limiting, jitter, and browser fingerprinting."""
     if not os.path.exists(cookies_path) or not shortcode:
         return ""
     
@@ -203,6 +288,11 @@ def extract_instagram_comments(shortcode, cookies_path, max_comments=75):
     return ""
 
 def find_imdb_in_text(caption_text, comments_text=""):
+    # Check for direct tt ID first
+    direct_tt = re.search(r'tt\d{7,8}', f"{caption_text} {comments_text}")
+    if direct_tt:
+        return f"https://www.imdb.com/title/{direct_tt.group(0)}/"
+
     if caption_text:
         norm_cap = unicodedata.normalize('NFKD', caption_text)
         cap_patterns = [
@@ -386,7 +476,6 @@ def scrape_instagram(url):
     shortcode = shortcode_match.group(1) if shortcode_match else ""
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # 1. Fetch Metadata with yt-dlp (fast & unauthenticated)
         try:
             cmd_meta = ["yt-dlp", "--dump-single-json", "--skip-download", "--no-warnings", url]
             proc_meta = subprocess.run(cmd_meta, capture_output=True, text=True, timeout=20)
@@ -400,7 +489,6 @@ def scrape_instagram(url):
         except Exception:
             pass
 
-        # 2. Download Video Stream directly with yt-dlp
         video_out = os.path.join(tmpdir, "video.mp4")
         try:
             cmd_dl = ["yt-dlp", "--no-warnings", "-o", video_out, url]
@@ -408,7 +496,6 @@ def scrape_instagram(url):
         except Exception:
             pass
 
-        # 3. Transcribe Spoken Video Audio with SpeechRecognition
         if os.path.exists(video_out) and os.path.getsize(video_out) > 1000:
             try:
                 audio_file = os.path.join(tmpdir, "audio.wav")
@@ -418,7 +505,6 @@ def scrape_instagram(url):
             except Exception:
                 pass
 
-            # 4. Extract On-Screen Keyframes with Tesseract OCR
             try:
                 frame_pattern = os.path.join(tmpdir, "frame_%02d.jpg")
                 subprocess.run(["ffmpeg", "-y", "-i", video_out, "-vf", "fps=0.5,scale=1280:-1", frame_pattern], capture_output=True)
@@ -436,7 +522,6 @@ def scrape_instagram(url):
             except Exception:
                 pass
 
-    # 5. Fallback metadata via gallery-dl if caption still empty
     if not result["caption"]:
         cmd_json = ["gallery-dl", "-j", "--no-download"]
         if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 100:
@@ -461,13 +546,11 @@ def scrape_instagram(url):
         except Exception:
             pass
 
-    # 6. Extract Comments safely
     if shortcode:
         comments_text = extract_instagram_comments(shortcode, cookies_path, max_comments=75)
         if comments_text:
             result["comments"] = comments_text
 
-    # 7. Check for GitHub and IMDb links
     combined_text = f"{result['caption']} {result['comments']} {result['spokenTranscript']} {result['onScreenText']}"
     gh_match = re.search(r'https?://github\.com/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+', combined_text)
     if gh_match:
@@ -498,6 +581,20 @@ def scrape_webpage(url):
         "error": None
     }
     
+    # 1. Direct IMDb URL Handling
+    tt_match = re.search(r'tt\d{7,8}', url)
+    if "imdb.com" in url.lower() or tt_match:
+        tt_id = tt_match.group(0) if tt_match else ""
+        imdb_meta = get_imdb_meta_by_id(tt_id)
+        if imdb_meta:
+            result["title"] = imdb_meta["title"]
+            result["caption"] = imdb_meta["caption"]
+            result["imageUrl"] = imdb_meta["imageUrl"]
+            result["imdbUrl"] = imdb_meta["imdbUrl"]
+            result["author"] = f"IMDb ({imdb_meta['type']})"
+            result["sourceType"] = "imdb"
+            return result
+
     try:
         req = urllib.request.Request(
             url,

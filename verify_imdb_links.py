@@ -7,10 +7,36 @@ import urllib.parse
 import re
 import unicodedata
 
+def get_imdb_meta_by_id(tt_id):
+    if not tt_id:
+        return None
+    try:
+        url = f"https://v3.sg.media-imdb.com/suggestion/x/{tt_id}.json"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for it in data.get("d", []):
+                if it.get("id") == tt_id:
+                    year = it.get("y")
+                    title_str = f"{it.get('l')} ({year})" if year else it.get('l')
+                    return {
+                        "title": title_str,
+                        "imdbUrl": f"https://www.imdb.com/title/{tt_id}/"
+                    }
+    except Exception:
+        pass
+    return None
+
 def lookup_imdb_precise(title_query):
     if not title_query or len(title_query.strip()) < 2:
         return None, ""
         
+    tt_match = re.search(r'tt\d{7,8}', title_query)
+    if tt_match:
+        meta = get_imdb_meta_by_id(tt_match.group(0))
+        if meta:
+            return meta["title"], meta["imdbUrl"]
+
     norm = unicodedata.normalize('NFKD', title_query)
     year_match = re.search(r'\((\d{4})\)', norm)
     target_year = int(year_match.group(1)) if year_match else None
@@ -81,15 +107,17 @@ def verify_and_patch_markdown(markdown_text):
     if not markdown_text:
         return markdown_text
 
-    # 1. Extract H1 Header Title (e.g. # 🎬 Argylle (2024) or # 🎌 The Brilliant Healer...)
+    # 1. Extract existing tt ID in markdown if it came from a verified source
+    existing_tt = re.search(r'imdb\.com/title/(tt\d+)', markdown_text)
+    
+    # 2. Extract H1 Header Title (e.g. # 🎬 Blade: The Series (2006))
     h1_match = re.search(r'^#\s+(?:🎬|🎌|🎥|📺|🎞️|🍿)?\s*[\*\_]*([^\n\*\_]+)[\*\_]*', markdown_text, re.MULTILINE)
     h1_title = h1_match.group(1).strip() if h1_match else ""
 
-    # 2. Extract Recommended Titles list if present
-    # e.g. • **Black Sails (2014–2016)**: ...
+    # 3. Extract Recommended Titles list if present
     bullet_titles = re.findall(r'•\s+\*\*([^\*:]+)\*\*', markdown_text)
 
-    # 3. Lookup verified IMDb link for primary title
+    # 4. Lookup verified IMDb link
     primary_link = ""
     if h1_title:
         _, primary_link = lookup_imdb_precise(h1_title)
@@ -97,14 +125,16 @@ def verify_and_patch_markdown(markdown_text):
     if not primary_link and bullet_titles:
         _, primary_link = lookup_imdb_precise(bullet_titles[0])
 
-    # 4. If we found a verified IMDb link, replace or append in Markdown
+    if not primary_link and existing_tt:
+        primary_link = f"https://www.imdb.com/title/{existing_tt.group(1)}/"
+
+    # 5. Patch verified IMDb link into markdown
     if primary_link:
         if re.search(r'🎬?\s*\*\*IMDb:\*\*\s*\S+', markdown_text):
             markdown_text = re.sub(r'🎬?\s*\*\*IMDb:\*\*\s*\S+', f'🎬 **IMDb:** {primary_link}', markdown_text)
         elif re.search(r'https?://(?:www\.)?imdb\.com/title/tt\d+/?', markdown_text):
             markdown_text = re.sub(r'https?://(?:www\.)?imdb\.com/title/tt\d+/?', primary_link, markdown_text)
         else:
-            # Append before Where to Watch or at the end
             if "📺 **Where to Watch:**" in markdown_text:
                 markdown_text = markdown_text.replace("📺 **Where to Watch:**", f"🎬 **IMDb:** {primary_link}\n📺 **Where to Watch:**")
             elif "🔗 **Source:**" in markdown_text:

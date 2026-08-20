@@ -8,42 +8,110 @@ import re
 import unicodedata
 from bs4 import BeautifulSoup
 
-def get_best_imdb_match(query):
-    if not query or len(query.strip()) < 2:
+def get_imdb_meta_by_id(tt_id):
+    if not tt_id:
+        return None
+    try:
+        url = f"https://v3.sg.media-imdb.com/suggestion/x/{tt_id}.json"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for it in data.get("d", []):
+                if it.get("id") == tt_id:
+                    year = it.get("y")
+                    title_str = f"{it.get('l')} ({year})" if year else it.get('l')
+                    stars = it.get("s", "")
+                    q_type = it.get("q", "Movie / TV Show")
+                    img_url = it.get("i", {}).get("imageUrl", "")
+                    
+                    desc = f"{title_str} • Type: {q_type}"
+                    if stars:
+                        desc += f" • Starring: {stars}"
+                        
+                    return {
+                        "title": title_str,
+                        "cleanTitle": it.get("l"),
+                        "year": year,
+                        "type": q_type,
+                        "stars": stars,
+                        "caption": desc,
+                        "imageUrl": img_url,
+                        "imdbUrl": f"https://www.imdb.com/title/{tt_id}/"
+                    }
+    except Exception:
+        pass
+    return None
+
+def lookup_imdb_precise(title_query):
+    if not title_query or len(title_query.strip()) < 2:
         return None, ""
+        
+    tt_match = re.search(r'tt\d{7,8}', title_query)
+    if tt_match:
+        meta = get_imdb_meta_by_id(tt_match.group(0))
+        if meta:
+            return meta["title"], meta["imdbUrl"]
+
+    norm = unicodedata.normalize('NFKD', title_query)
+    year_match = re.search(r'\((\d{4})\)', norm)
+    target_year = int(year_match.group(1)) if year_match else None
     
-    clean_query = unicodedata.normalize('NFKD', query).strip()
+    clean = re.sub(r'[\#\*\_\(\)🎬🎌🏷️•\>\:\-]', ' ', norm)
+    clean = re.sub(r'\b(20\d\d|19\d\d)\b', '', clean)
+    clean = re.sub(r'\b(anime|manga|manhwa|manhua|webtoon|movie|series|tv|season|show|recommendation|complete series|hindi dubbed)\b', '', clean, flags=re.IGNORECASE)
+    clean = ' '.join(clean.split()).strip()
+    
+    if len(clean) < 2:
+        return None, ""
+        
     variations = [
-        clean_query,
-        clean_query.replace('are', 're').replace("'", ""),
-        re.sub(r'[^a-zA-Z0-9\s]', '', clean_query)
+        clean,
+        clean.replace(' ', '_'),
+        re.sub(r'[^a-zA-Z0-9\s]', '', clean),
+        re.sub(r'[^a-zA-Z0-9\s]', '', clean).replace(' ', '_')
     ]
     
     candidates = []
+    seen_ids = set()
     for var in variations:
-        clean = var.strip().replace(' ', '_').lower()
-        if not clean or clean in ["recipe", "workout", "routine", "exercise", "github", "repo"]:
+        q = var.strip().replace(' ', '_').lower()
+        if not q:
             continue
-        url = f"https://v3.sg.media-imdb.com/suggestion/x/{urllib.parse.quote(clean)}.json"
+        url = f"https://v3.sg.media-imdb.com/suggestion/x/{urllib.parse.quote(q)}.json"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
         try:
             with urllib.request.urlopen(req, timeout=3) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+                data = json.loads(resp.read().decode('utf-8'))
                 for it in data.get('d', []):
-                    if it.get('id', '').startswith('tt'):
+                    item_id = it.get('id', '')
+                    if item_id.startswith('tt') and item_id not in seen_ids:
                         candidates.append(it)
+                        seen_ids.add(item_id)
         except Exception:
             pass
-
+            
     if not candidates:
         return None, ""
-
+        
     def score(it):
-        has_year = 1 if it.get('y') else 0
-        rank = it.get('rank', 999999)
+        item_title = it.get('l', '').lower().strip()
+        query_lower = clean.lower()
+        
+        exact_match = 100 if item_title == query_lower else (50 if query_lower in item_title or item_title in query_lower else 0)
+        
+        item_year = it.get('y')
+        year_score = 0
+        if target_year and item_year:
+            year_score = 40 if abs(item_year - target_year) <= 1 else -10
+        elif item_year:
+            year_score = 5
+
         q_type = it.get('q', '')
-        is_primary = 1 if q_type in ['feature', 'TV series', 'TV mini-series', 'movie'] else 0
-        return (-has_year, -is_primary, rank)
+        is_primary = 20 if q_type in ['feature', 'TV series', 'TV mini-series', 'movie', 'tvSpecial'] else 0
+        
+        rank = it.get('rank', 999999)
+        total_score = exact_match + year_score + is_primary
+        return (-total_score, rank)
 
     candidates.sort(key=score)
     best = candidates[0]
@@ -90,9 +158,20 @@ def resolve_context(raw_text):
     if not text:
         return result
 
+    # 1. Direct IMDb ID / Link Detection
+    tt_match = re.search(r'tt\d{7,8}', text)
+    if "imdb.com" in text.lower() or tt_match:
+        tt_id = tt_match.group(0) if tt_match else ""
+        meta = get_imdb_meta_by_id(tt_id)
+        if meta:
+            result["title"] = meta["title"]
+            result["imdbUrl"] = meta["imdbUrl"]
+            result["suggestedCategory"] = "media"
+            return result
+
     lower = text.lower()
 
-    # 1. Tech & Project detection
+    # 2. Tech & Project detection
     project_keywords = ["github", "repo", "library", "framework", "software", "sdk", "api", "npm", "pip", "developer tool", "open source", "workstation", "orchestrator", "ai agent", "coding", "terminal"]
     if any(k in lower for k in project_keywords) or "ai" in lower.split():
         result["suggestedCategory"] = "project"
@@ -100,28 +179,28 @@ def resolve_context(raw_text):
         if gh:
             result["githubUrl"] = gh
 
-    # 2. Recipe detection
+    # 3. Recipe detection
     recipe_keywords = ["recipe", "ingredients", "cook", "bake", "grams", "tbsp", "tsp", "tablespoon", "pasta", "curry", "chicken", "salad", "cake", "sauce", "pan", "skillet", "oven", "boil"]
     if any(k in lower for k in recipe_keywords) and not result["suggestedCategory"]:
         result["suggestedCategory"] = "recipe"
 
-    # 3. Workout detection
+    # 4. Workout detection
     workout_keywords = ["workout", "routine", "exercise", "sets", "reps", "bench press", "squat", "deadlift", "dumbbells", "bicep", "tricep", "chest", "back", "legs", "hypertrophy", "calisthenics", "mobility", "cardio", "push pull legs"]
     if any(k in lower for k in workout_keywords) and not result["suggestedCategory"]:
         result["suggestedCategory"] = "workout"
 
-    # 4. Anime / Manhwa / Manga detection
+    # 5. Anime / Manhwa / Manga detection
     anime_keywords = ["anime", "manga", "manhwa", "manhua", "webtoon", "donghua", "light novel", "otaku", "crunchyroll"]
     if any(k in lower for k in anime_keywords) and not result["suggestedCategory"]:
         result["suggestedCategory"] = "anime"
-        title, imdb_url = get_best_imdb_match(re.sub(r'(anime|manhwa|manga|manhua|webtoon|donghua)', '', text, flags=re.IGNORECASE).strip())
+        title, imdb_url = lookup_imdb_precise(re.sub(r'(anime|manhwa|manga|manhua|webtoon|donghua)', '', text, flags=re.IGNORECASE).strip())
         if imdb_url:
             result["title"] = title
             result["imdbUrl"] = imdb_url
 
-    # 5. Movie / TV Show detection
+    # 6. Movie / TV Show detection
     if not result["suggestedCategory"]:
-        title, imdb_url = get_best_imdb_match(text)
+        title, imdb_url = lookup_imdb_precise(text)
         if imdb_url:
             result["title"] = title
             result["imdbUrl"] = imdb_url
