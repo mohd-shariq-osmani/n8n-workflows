@@ -19,14 +19,23 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-1527074193823498283}
       - DISCORD_MOVIE_TV_CHANNEL_ID=${DISCORD_MOVIE_TV_CHANNEL_ID:-1527859066259374212}
+      - DISCORD_ANIME_CHANNEL_ID=${DISCORD_ANIME_CHANNEL_ID:-1538893352668233789}
       - RADARR_HOST=http://host.docker.internal:7878
       - RADARR_API_KEY=${RADARR_API_KEY:-ebd830d1dbd34d299e45ad204ea33a23}
+      - RADARR_ROOT_FOLDER=/Volumes/HDD 4TB/Media Server/Movies
       - SONARR_HOST=http://host.docker.internal:8989
       - SONARR_API_KEY=${SONARR_API_KEY:-71f36ff7d42f46ffaef9d8ca8752670b}
+      - SONARR_TV_ROOT_FOLDER=/Volumes/HDD 4TB/Media Server/TV Shows
+      - SONARR_ANIME_ROOT_FOLDER=/Volumes/HDD 4TB/Media Server/Anime
     volumes:
       - n8n_data:/home/node/.n8n
       - ./config.json:/home/node/.config/gallery-dl/config.json:ro
       - ./cookies.txt:/home/node/.config/gallery-dl/cookies.txt:ro
+      - ./universal_scraper.py:/usr/local/bin/universal_scraper.py:ro
+      - ./analyze_image.py:/usr/local/bin/analyze_image.py:ro
+      - ./resolve_input_context.py:/usr/local/bin/resolve_input_context.py:ro
+      - ./verify_imdb_links.py:/usr/local/bin/verify_imdb_links.py:ro
+      - ./generate_daily_digest.py:/usr/local/bin/generate_daily_digest.py:ro
       - ./media_dispatcher.py:/usr/local/bin/media_dispatcher.py:ro
 
   ngrok:
@@ -48,6 +57,7 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID:-1527074193823498283}
       - DISCORD_MOVIE_TV_CHANNEL_ID=${DISCORD_MOVIE_TV_CHANNEL_ID:-1527859066259374212}
+      - DISCORD_ANIME_CHANNEL_ID=${DISCORD_ANIME_CHANNEL_ID:-1538893352668233789}
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/discord-intake
       - N8N_MOVIE_TV_WEBHOOK_URL=http://n8n:5678/webhook/movie-tv
     depends_on:

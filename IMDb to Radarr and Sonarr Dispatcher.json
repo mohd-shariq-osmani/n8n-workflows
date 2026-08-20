@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const { execSync } = require('child_process');\n\nconst results = [];\nfor (const item of $input.all()) {\n  const body = item.json.body || item.json;\n  const content = body.content || body.url || body.imdbUrl || body.link || JSON.stringify(body);\n\n  try {\n    const cmd = `python3 /usr/local/bin/media_dispatcher.py ${JSON.stringify(content)}`;\n    const stdout = execSync(cmd, { encoding: 'utf-8', timeout: 30000 });\n    const parsed = JSON.parse(stdout.trim());\n    results.push({\n      json: {\n        ...body,\n        ...parsed,\n        rawContent: content\n      }\n    });\n  } catch (err) {\n    results.push({\n      json: {\n        ...body,\n        success: false,\n        error: err.message || String(err),\n        rawContent: content\n      }\n    });\n  }\n}\nreturn results;"
+        "jsCode": "const { execSync } = require('child_process');\n\nconst results = [];\nfor (const item of $input.all()) {\n  const body = item.json.body || item.json;\n  const content = body.content || body.url || body.imdbUrl || body.link || JSON.stringify(body);\n\n  try {\n    const stdout = execSync('python3 /usr/local/bin/media_dispatcher.py', {\n      input: String(content),\n      encoding: 'utf-8',\n      timeout: 30000\n    });\n    const parsed = JSON.parse(stdout.trim());\n    results.push({\n      json: {\n        ...body,\n        ...parsed,\n        rawContent: content\n      }\n    });\n  } catch (err) {\n    results.push({\n      json: {\n        ...body,\n        success: false,\n        error: err.message || String(err),\n        rawContent: content\n      }\n    });\n  }\n}\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -75,11 +75,10 @@
         },
         "channelId": {
           "__rl": true,
-          "value": "1527859066259374212",
-          "mode": "list",
-          "cachedResultName": "movie-tv"
+          "value": "={{ $json.channelId || ($json.channelType === 'anime-manhua' ? '1538893352668233789' : '1527859066259374212') }}",
+          "mode": "id"
         },
-        "content": "={{ $json.message || ($json.mediaType === 'Movie' ? '\ud83c\udfac **' + $json.title + ' (' + $json.year + ')** added to **Radarr**!' : '\ud83d\udcfa **' + $json.title + ' (' + $json.year + ')** added to **Sonarr**!') }}",
+        "content": "={{ $json.message || ($json.mediaType === 'Movie' ? '🎬 **' + $json.title + ' (' + $json.year + ')** added to **Radarr**!' : '📺 **' + $json.title + ' (' + $json.year + ')** added to **Sonarr**!') }}",
         "options": {},
         "embeds": {
           "values": []
@@ -92,7 +91,7 @@
         100
       ],
       "id": "post-confirmation",
-      "name": "Post Confirmation to #movie-tv",
+      "name": "Post Confirmation to Channel",
       "credentials": {
         "discordBotApi": {
           "id": "Zr8t8Yruimx7lO52",
@@ -115,7 +114,7 @@
           "mode": "list",
           "cachedResultName": "error-log"
         },
-        "content": "=\ud83d\udea8 **IMDb Media Router Error**\n**Input:** {{ $json.rawContent || $json.content || 'N/A' }}\n**Error:** {{ $json.error || 'Unknown error processing media item' }}",
+        "content": "=🚨 **IMDb Media Router Error**\n**Input:** {{ $json.rawContent || $json.content || 'N/A' }}\n**Error:** {{ $json.error || 'Unknown error processing media item' }}",
         "options": {},
         "embeds": {
           "values": []
@@ -164,7 +163,7 @@
       "main": [
         [
           {
-            "node": "Post Confirmation to #movie-tv",
+            "node": "Post Confirmation to Channel",
             "type": "main",
             "index": 0
           }
