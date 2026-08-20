@@ -120,6 +120,42 @@ def lookup_sonarr(imdb_id):
         pass
     return None
 
+def is_anime_series(series, input_data=""):
+    """Robust multi-factor detection to determine if a show belongs in the Anime folder."""
+    genres = [str(g).lower() for g in series.get("genres", [])]
+    series_type = str(series.get("seriesType", "")).lower()
+    lang = str(series.get("originalLanguage", {}).get("name", "")).lower()
+    title = str(series.get("title", "")).lower()
+    overview = str(series.get("overview", "")).lower()
+    input_lower = str(input_data).lower()
+
+    # 1. Direct channel or input hints
+    if "anime-manhua" in input_lower or "anime" in input_lower or "manhwa" in input_lower or "manga" in input_lower:
+        return True
+
+    # 2. Genre or Type checks
+    if any(g in ["anime", "animation", "donghua"] for g in genres) and (lang in ["japanese", "korean", "chinese"] or "anime" in genres):
+        return True
+    
+    if "anime" in genres or series_type == "anime":
+        return True
+
+    # 3. Japanese / Asian Animation
+    if lang == "japanese" and "animation" in genres:
+        return True
+
+    # 4. Keyword heuristics in title or synopsis
+    anime_keywords = [
+        "isekai", "reincarnat", "leveling", "jujutsu", "demon slayer", "titan",
+        "naruto", "one piece", "bleach", "dragon ball", "shonen", "seinen",
+        "cheat skill", "hunter", "manhwa", "manhua", "donghua", "gintama",
+        "shadow", "slayer", "healer", "crunchyroll"
+    ]
+    if any(k in title for k in anime_keywords) or (any(k in overview for k in anime_keywords) and "animation" in genres):
+        return True
+
+    return False
+
 def process_imdb_item(input_data):
     """Main routing logic: checks Radarr & Sonarr, adds item, and triggers Jellyfin scan."""
     imdb_id = extract_imdb_id(input_data)
@@ -141,12 +177,10 @@ def process_imdb_item(input_data):
     if radarr_movie and not sonarr_series:
         return add_to_radarr(radarr_movie, imdb_url)
     elif sonarr_series and not radarr_movie:
-        return add_to_sonarr(sonarr_series, imdb_url)
+        return add_to_sonarr(sonarr_series, imdb_url, input_data)
     elif radarr_movie and sonarr_series:
-        genres = sonarr_series.get("genres", [])
-        series_type = sonarr_series.get("seriesType", "")
-        if any("anime" in str(g).lower() for g in genres) or series_type == "anime" or sonarr_series.get("episodeCount", 0) > 1:
-            return add_to_sonarr(sonarr_series, imdb_url)
+        if is_anime_series(sonarr_series, input_data) or sonarr_series.get("episodeCount", 0) > 1:
+            return add_to_sonarr(sonarr_series, imdb_url, input_data)
         else:
             return add_to_radarr(radarr_movie, imdb_url)
     else:
@@ -268,19 +302,17 @@ def add_to_radarr(movie, imdb_url):
             "imdbUrl": imdb_url
         }
 
-def add_to_sonarr(series, imdb_url):
+def add_to_sonarr(series, imdb_url, input_data=""):
     """Add a TV series / anime to Sonarr or trigger search if already present, then trigger Jellyfin refresh."""
     title = series.get("title", "Unknown Series")
     year = series.get("year", "")
     tvdb_id = series.get("tvdbId")
-    genres = series.get("genres", [])
-    series_type = series.get("seriesType", "standard")
     poster = get_poster_url(series.get("images", []))
     overview = series.get("overview", "")
 
-    is_anime = any("anime" in str(g).lower() for g in genres) or series_type == "anime"
+    is_anime = is_anime_series(series, input_data)
     root_folder = SONARR_ANIME_ROOT_FOLDER if is_anime else SONARR_TV_ROOT_FOLDER
-    final_series_type = "anime" if is_anime else (series_type or "standard")
+    final_series_type = "anime" if is_anime else (series.get("seriesType") or "standard")
     type_label = "Anime Series" if is_anime else "TV Show"
 
     series_id = series.get("id")
@@ -297,6 +329,18 @@ def add_to_sonarr(series, imdb_url):
     jellyfin_refreshed = trigger_jellyfin_refresh()
 
     if series_id and series_id > 0:
+        # Check if the existing series path needs to be moved/corrected
+        try:
+            cur_series = api_request(f"{SONARR_HOST}/api/v3/series/{series_id}", SONARR_API_KEY, timeout=5)
+            cur_path = cur_series.get("path", "")
+            if is_anime and "TV Shows" in cur_path:
+                cur_series["path"] = f"{SONARR_ANIME_ROOT_FOLDER}/{title}"
+                cur_series["rootFolderPath"] = SONARR_ANIME_ROOT_FOLDER
+                cur_series["seriesType"] = "anime"
+                api_request(f"{SONARR_HOST}/api/v3/series/{series_id}?moveFiles=true", SONARR_API_KEY, data=cur_series, method="PUT", timeout=8)
+        except Exception:
+            pass
+
         try:
             api_request(
                 f"{SONARR_HOST}/api/v3/command",
