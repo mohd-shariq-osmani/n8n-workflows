@@ -3,6 +3,10 @@ cookies.txt
 .env
 *.env
 
+# Local Secondary Workflows (Radarr / Sonarr / Media Server)
+IMDb to Radarr and Sonarr Dispatcher.json
+media_dispatcher.py
+
 # Operating System
 .DS_Store
 Thumbs.db
